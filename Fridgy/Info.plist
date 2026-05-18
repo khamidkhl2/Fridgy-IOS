@@ -1,0 +1,58 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>CFBundleDevelopmentRegion</key>
+	<string>$(DEVELOPMENT_LANGUAGE)</string>
+	<key>CFBundleDisplayName</key>
+	<string>Fridgy</string>
+	<key>CFBundleExecutable</key>
+	<string>$(EXECUTABLE_NAME)</string>
+	<key>CFBundleIdentifier</key>
+	<string>$(PRODUCT_BUNDLE_IDENTIFIER)</string>
+	<key>CFBundleInfoDictionaryVersion</key>
+	<string>6.0</string>
+	<key>CFBundleName</key>
+	<string>$(PRODUCT_NAME)</string>
+	<key>CFBundlePackageType</key>
+	<string>APPL</string>
+	<key>CFBundleShortVersionString</key>
+	<string>$(MARKETING_VERSION)</string>
+	<key>CFBundleURLTypes</key>
+	<array>
+		<dict>
+			<key>CFBundleURLName</key>
+			<string>com.fridgy.app</string>
+			<key>CFBundleURLSchemes</key>
+			<array>
+				<string>fridgy</string>
+			</array>
+		</dict>
+	</array>
+	<key>CFBundleVersion</key>
+	<string>$(CURRENT_PROJECT_VERSION)</string>
+	<key>FRIDGY_API_BASE_URL</key>
+	<string>https://abcomiqfprvfffwqfvgn.supabase.co/functions/v1</string>
+	<key>FRIDGY_AUTH_REDIRECT_URL</key>
+	<string>fridgy://auth-callback</string>
+	<key>NSCameraUsageDescription</key>
+	<string>Fridgy uses the camera to scan your fridge and identify ingredients for recipe ideas.</string>
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>Fridgy lets you choose food photos to analyze ingredients and suggest recipes.</string>
+	<key>SUPABASE_ANON_KEY</key>
+	<string>eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImFiY29taXFmcHJ2ZmZmd3FmdmduIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzc2OTQ1OTMsImV4cCI6MjA5MzI3MDU5M30.Yjx2YuI0K6a1lqoGfcYjJ_BCK3-1OaxHyZY3LEdp35M</string>
+	<key>SUPABASE_URL</key>
+	<string>https://abcomiqfprvfffwqfvgn.supabase.co</string>
+	<key>UILaunchScreen</key>
+	<dict>
+		<key>UIColorName</key>
+		<string>LaunchBackground</string>
+	</dict>
+	<key>UISupportedInterfaceOrientations</key>
+	<array>
+		<string>UIInterfaceOrientationPortrait</string>
+	</array>
+	<key>USDA_FOODDATA_API_KEY</key>
+	<string>wLADcjL3CY7LEGWIceVvnrxQ4NfU40evAbkKmCVz</string>
+</dict>
+</plist>
