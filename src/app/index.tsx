@@ -1,98 +1,90 @@
-import * as Device from 'expo-device';
-import { Platform, StyleSheet } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+/** Screen 1 — Welcome. Minimal editorial intro: wordmark, serif headline, CTA. */
+import { Redirect } from 'expo-router';
+import { View } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { H } from '@/components/Headline';
+import { LeafMark } from '@/components/LeafMark';
+import { PrimaryButton } from '@/components/PrimaryButton';
+import { ScreenBg } from '@/components/ScreenBg';
+import { Txt } from '@/components/Txt';
+import { useAuth } from '@/lib/auth';
+import { useGo, useOnboarding } from '@/lib/onboarding';
+import { useProfileRow } from '@/lib/profile';
+import { useTheme } from '@/theme/ThemeProvider';
 
-import { AnimatedIcon } from '@/components/animated-icon';
-import { HintRow } from '@/components/hint-row';
-import { ThemedText } from '@/components/themed-text';
-import { ThemedView } from '@/components/themed-view';
-import { WebBadge } from '@/components/web-badge';
-import { BottomTabInset, MaxContentWidth, Spacing } from '@/constants/theme';
+export default function WelcomeScreen() {
+  const { theme } = useTheme();
+  const go = useGo();
+  const { session, loading } = useAuth();
+  const { row, loading: profileLoading } = useProfileRow();
+  const { isOnboarded } = useOnboarding();
+  const insets = useSafeAreaInsets();
 
-function getDevMenuHint() {
-  if (Platform.OS === 'web') {
-    return <ThemedText type="small">use browser devtools</ThemedText>;
+  // launch gate: a saved session enters the app only if onboarding is complete;
+  // otherwise (e.g. signed in but never set up a plan) it resumes onboarding.
+  if (loading) return <ScreenBg>{null}</ScreenBg>;
+  if (session) {
+    // wait for the profile fetch + local flag before deciding (avoids a wrong-route flash)
+    if ((profileLoading && row === null) || isOnboarded === null) return <ScreenBg>{null}</ScreenBg>;
+    const onboarded = row?.onboarded === true || isOnboarded === true;
+    return <Redirect href={onboarded ? '/home' : '/name'} />;
   }
-  if (Device.isDevice) {
-    return (
-      <ThemedText type="small">
-        shake device or press <ThemedText type="code">m</ThemedText> in terminal
-      </ThemedText>
-    );
-  }
-  const shortcut = Platform.OS === 'android' ? 'cmd+m (or ctrl+m)' : 'cmd+d';
+
   return (
-    <ThemedText type="small">
-      press <ThemedText type="code">{shortcut}</ThemedText>
-    </ThemedText>
+    <ScreenBg>
+      <View
+        style={{
+          flex: 1,
+          paddingHorizontal: 30,
+          paddingTop: insets.top + 26,
+          paddingBottom: Math.max(insets.bottom, 20) + 16,
+        }}
+      >
+        {/* wordmark */}
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 9 }}>
+          <LeafMark size={26} />
+          <H size={22} style={{ marginTop: 3 }}>
+            Fridgy
+          </H>
+        </View>
+
+        {/* editorial headline */}
+        <View style={{ flex: 1, justifyContent: 'center' }}>
+          <Txt
+            w={800}
+            size={13}
+            color={theme.primary}
+            style={{ textTransform: 'uppercase', letterSpacing: 1.8, marginBottom: 18 }}
+          >
+            Fridge to table
+          </Txt>
+          <H size={42} style={{ letterSpacing: -0.5 }}>
+            {'Cook what\nyou already\nhave.'}
+          </H>
+          <Txt w={500} size={16} color={theme.inkSec} style={{ lineHeight: 24, marginTop: 20, maxWidth: 330 }}>
+            Scan your fridge, get recipes you can actually make, and track every macro — automatically.
+          </Txt>
+        </View>
+
+        {/* CTA */}
+        <View>
+          <PrimaryButton onPress={() => go.push('/name')}>Get Started</PrimaryButton>
+          <View style={{ flexDirection: 'row', justifyContent: 'center', marginTop: 18 }}>
+            <Txt w={500} size={15} color={theme.inkSec}>
+              Already have an account?{' '}
+            </Txt>
+            <Txt
+              w={800}
+              size={15}
+              color={theme.ink}
+              onPress={() => go.push('/auth?mode=signin')}
+              style={{ textDecorationLine: 'underline' }}
+            >
+              Sign in
+            </Txt>
+          </View>
+        </View>
+      </View>
+    </ScreenBg>
   );
 }
-
-export default function HomeScreen() {
-  return (
-    <ThemedView style={styles.container}>
-      <SafeAreaView style={styles.safeArea}>
-        <ThemedView style={styles.heroSection}>
-          <AnimatedIcon />
-          <ThemedText type="title" style={styles.title}>
-            Welcome to&nbsp;Expo
-          </ThemedText>
-        </ThemedView>
-
-        <ThemedText type="code" style={styles.code}>
-          get started
-        </ThemedText>
-
-        <ThemedView type="backgroundElement" style={styles.stepContainer}>
-          <HintRow
-            title="Try editing"
-            hint={<ThemedText type="code">src/app/index.tsx</ThemedText>}
-          />
-          <HintRow title="Dev tools" hint={getDevMenuHint()} />
-          <HintRow
-            title="Fresh start"
-            hint={<ThemedText type="code">npm run reset-project</ThemedText>}
-          />
-        </ThemedView>
-
-        {Platform.OS === 'web' && <WebBadge />}
-      </SafeAreaView>
-    </ThemedView>
-  );
-}
-
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    justifyContent: 'center',
-    flexDirection: 'row',
-  },
-  safeArea: {
-    flex: 1,
-    paddingHorizontal: Spacing.four,
-    alignItems: 'center',
-    gap: Spacing.three,
-    paddingBottom: BottomTabInset + Spacing.three,
-    maxWidth: MaxContentWidth,
-  },
-  heroSection: {
-    alignItems: 'center',
-    justifyContent: 'center',
-    flex: 1,
-    paddingHorizontal: Spacing.four,
-    gap: Spacing.four,
-  },
-  title: {
-    textAlign: 'center',
-  },
-  code: {
-    textTransform: 'uppercase',
-  },
-  stepContainer: {
-    gap: Spacing.three,
-    alignSelf: 'stretch',
-    paddingHorizontal: Spacing.three,
-    paddingVertical: Spacing.four,
-    borderRadius: Spacing.four,
-  },
-});

@@ -1,0 +1,90 @@
+/**
+ * Fridge inventory data layer: `fridge_items` CRUD + a focus-aware hook.
+ * Items arrive either from a scan (AI vision) or manual entry.
+ */
+import { useQuery } from '@tanstack/react-query';
+import { useAuth } from './auth';
+import { invalidate, qk } from './queryClient';
+import { supabase } from './supabase';
+
+export type FridgeItem = {
+  id: string;
+  user_id: string;
+  name: string;
+  quantity: string | null;
+  category: string | null;
+  source: 'manual' | 'scan';
+  added_at: string;
+  expires_at: string | null;
+  created_at: string;
+};
+
+/** A detected/entered ingredient before it's persisted. */
+export type DetectedItem = { name: string; category?: string | null };
+
+export async function listFridgeItems(userId: string): Promise<FridgeItem[]> {
+  const { data, error } = await supabase
+    .from('fridge_items')
+    .select('*')
+    .eq('user_id', userId)
+    .order('added_at', { ascending: false });
+  if (error) return [];
+  return (data as FridgeItem[]) ?? [];
+}
+
+/** Bulk-insert detected ingredients. Returns the inserted rows. */
+export async function addFridgeItems(
+  userId: string,
+  items: DetectedItem[],
+  source: FridgeItem['source'] = 'scan'
+): Promise<FridgeItem[]> {
+  const clean = items
+    .map((it) => ({ name: it.name.trim(), category: it.category?.trim() || null }))
+    .filter((it) => it.name.length > 0);
+  if (clean.length === 0) return [];
+
+  const { data, error } = await supabase
+    .from('fridge_items')
+    .insert(clean.map((it) => ({ user_id: userId, name: it.name, category: it.category, source })))
+    .select();
+  if (error) return [];
+  invalidate.fridge();
+  return (data as FridgeItem[]) ?? [];
+}
+
+export async function addFridgeItem(userId: string, name: string): Promise<FridgeItem | null> {
+  const trimmed = name.trim();
+  if (!trimmed) return null;
+  const { data, error } = await supabase
+    .from('fridge_items')
+    .insert({ user_id: userId, name: trimmed, source: 'manual' })
+    .select()
+    .maybeSingle();
+  if (error) return null;
+  invalidate.fridge();
+  return (data as FridgeItem | null) ?? null;
+}
+
+export async function deleteFridgeItem(id: string): Promise<boolean> {
+  const { error } = await supabase.from('fridge_items').delete().eq('id', id);
+  if (!error) invalidate.fridge();
+  return !error;
+}
+
+/** Current fridge contents from the shared query cache. */
+export function useFridgeItems(): {
+  items: FridgeItem[];
+  loading: boolean;
+  reload: () => void;
+} {
+  const { session } = useAuth();
+  const userId = session?.user?.id ?? null;
+
+  const q = useQuery({
+    queryKey: qk.fridge(userId),
+    queryFn: () => listFridgeItems(userId!),
+    enabled: !!userId,
+  });
+
+  return { items: q.data ?? [], loading: q.isLoading, reload: () => void q.refetch() };
+}
