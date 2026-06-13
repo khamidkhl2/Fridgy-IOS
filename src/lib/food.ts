@@ -3,10 +3,12 @@
  * and pure aggregation helpers (daily totals, per-meal grouping, streak, week
  * activity) consumed by the dashboard.
  */
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useQuery } from '@tanstack/react-query';
-import { useEffect, useState } from 'react';
+import { useEffect, useReducer, useState } from 'react';
 import { AppState, type AppStateStatus } from 'react-native';
 import { useAuth } from './auth';
+import type { Tables } from './database.types';
 import { invalidate, qk } from './queryClient';
 import { supabase } from './supabase';
 import type { Macros } from './usda';
@@ -20,19 +22,14 @@ export const MEALS: { key: MealType; label: string }[] = [
   { key: 'snack', label: 'Snacks' },
 ];
 
-export type FoodLog = {
-  id: string;
-  user_id: string;
-  logged_on: string; // 'YYYY-MM-DD'
+/**
+ * A row of `public.food_logs` (generated). The DB stores `meal_type`/`source`
+ * as plain text under check constraints; we refine them to the app's unions.
+ * `quantity` is grams; `logged_on` is 'YYYY-MM-DD'.
+ */
+export type FoodLog = Omit<Tables<'food_logs'>, 'meal_type' | 'source'> & {
   meal_type: MealType;
-  name: string;
-  calories: number;
-  protein_g: number;
-  carbs_g: number;
-  fat_g: number;
-  quantity: number; // grams
   source: 'manual' | 'scan' | 'recipe';
-  created_at: string;
 };
 
 // ── dates (local calendar day, not UTC) ──────────────────────────────────────
@@ -251,4 +248,61 @@ export function weekActivity(days: Set<string>, todayISO: string = localDateISO(
       iso === todayISO ? 'today' : iso < todayISO ? (days.has(iso) ? 'done' : 'future') : 'future';
     return { iso, weekday: WEEKDAY[d.getDay()], dayNum: d.getDate(), state };
   });
+}
+
+// ── portion unit preference (grams / ounces) ─────────────────────────────────
+// food_logs.quantity is always stored in grams (canonical); this preference only
+// changes how the add-food portion editor displays + steps the amount.
+
+export type FoodUnit = 'g' | 'oz';
+
+/** Grams per avoirdupois ounce (food weight, not the fluid oz used for water). */
+export const G_PER_OZ = 28.349523125;
+
+/** grams → display value in the chosen unit (rounded). */
+export function gramsToUnit(g: number, unit: FoodUnit): number {
+  return unit === 'oz' ? Math.round((g / G_PER_OZ) * 10) / 10 : Math.round(g);
+}
+
+/** A value in the chosen unit → grams. */
+export function unitToGrams(value: number, unit: FoodUnit): number {
+  return unit === 'oz' ? value * G_PER_OZ : value;
+}
+
+/** Step size (grams) for one nudge of the portion stepper in the given unit. */
+export function stepGrams(unit: FoodUnit): number {
+  return unit === 'oz' ? G_PER_OZ : 10; // 1 oz or 10 g
+}
+
+const KEY_FOOD_UNIT = 'fridgy_food_unit';
+let foodUnitValue: FoodUnit = 'g';
+let foodUnitLoaded = false;
+const foodUnitListeners = new Set<() => void>();
+
+/** Tiny global store so Units + add-food stay in sync (AsyncStorage-backed). */
+export function useFoodUnit(): [FoodUnit, (u: FoodUnit) => void] {
+  const [, force] = useReducer((n: number) => n + 1, 0);
+  useEffect(() => {
+    foodUnitListeners.add(force);
+    if (!foodUnitLoaded) {
+      foodUnitLoaded = true;
+      AsyncStorage.getItem(KEY_FOOD_UNIT).then((v) => {
+        if (v === 'g' || v === 'oz') {
+          foodUnitValue = v;
+          foodUnitListeners.forEach((l) => l());
+        }
+      });
+    }
+    return () => {
+      foodUnitListeners.delete(force);
+    };
+  }, []);
+
+  const setUnit = (u: FoodUnit) => {
+    foodUnitValue = u;
+    AsyncStorage.setItem(KEY_FOOD_UNIT, u).catch(() => {});
+    foodUnitListeners.forEach((l) => l());
+  };
+
+  return [foodUnitValue, setUnit];
 }

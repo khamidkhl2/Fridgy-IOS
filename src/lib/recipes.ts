@@ -7,6 +7,7 @@
 import { useQuery } from '@tanstack/react-query';
 import { useCallback, useMemo } from 'react';
 import { useAuth } from './auth';
+import type { Tables } from './database.types';
 import { functionErrorMessage } from './functions';
 import { invalidate, qk } from './queryClient';
 import { supabase } from './supabase';
@@ -28,22 +29,11 @@ export type GeneratedRecipe = {
   usesCount: number;
 };
 
-/** A persisted `recipes` row. */
-export type RecipeRow = {
-  id: string;
-  user_id: string;
-  title: string;
-  description: string | null;
-  meal_type: string | null;
-  minutes: number | null;
-  calories: number | null;
-  protein_g: number | null;
-  carbs_g: number | null;
-  fat_g: number | null;
+/** A persisted `recipes` row (generated); the jsonb `ingredients`/`steps`
+ *  columns are refined from `Json` to their real shapes. */
+export type RecipeRow = Omit<Tables<'recipes'>, 'ingredients' | 'steps'> & {
   ingredients: RecipeIngredient[];
   steps: string[];
-  uses_count: number;
-  created_at: string;
 };
 
 /** Normalized recipe shape the shared card renders (from generated or saved). */

@@ -21,6 +21,7 @@ import type { IconName } from '@/components/Icon';
 import { useAuth } from './auth';
 import {
   fetchProfile,
+  fetchProfileOutcome,
   onboardingTargets,
   rowTargets,
   saveOnboardingToProfile,
@@ -51,6 +52,9 @@ type ProfileCtx = {
   /** Locally-cached onboarding answers (offline fallback). */
   local: Record<string, unknown>;
   loading: boolean;
+  /** True when the last row fetch failed (offline / flaky), as opposed to
+   *  succeeding with no row. Lets the launch gate avoid a wrongful re-onboard. */
+  loadFailed: boolean;
   /** Re-fetch the row from the DB. */
   refresh: () => void;
 };
@@ -71,6 +75,7 @@ export function ProfileProvider({ children }: { children: React.ReactNode }) {
   const [row, setRow] = useState<ProfileRow | null>(null);
   const [local, setLocal] = useState<Record<string, unknown>>({});
   const [loading, setLoading] = useState(true);
+  const [loadFailed, setLoadFailed] = useState(false);
   const [nonce, setNonce] = useState(0);
 
   const refresh = useCallback(() => setNonce((n) => n + 1), []);
@@ -83,14 +88,16 @@ export function ProfileProvider({ children }: { children: React.ReactNode }) {
       if (!userId) {
         if (active) {
           setRow(null);
+          setLoadFailed(false);
           setLoading(false);
         }
         return;
       }
       if (active) setLoading(true);
-      const r = await fetchProfile(userId).catch(() => null);
+      const outcome = await fetchProfileOutcome(userId).catch(() => ({ row: null, ok: false }));
       if (active) {
-        setRow(r);
+        setRow(outcome.row);
+        setLoadFailed(!outcome.ok);
         setLoading(false);
       }
     })();
@@ -99,7 +106,9 @@ export function ProfileProvider({ children }: { children: React.ReactNode }) {
     };
   }, [userId, nonce]);
 
-  // local onboarding cache (drives the UI before the row loads / offline)
+  // local onboarding cache (drives the UI before the row loads / offline).
+  // Re-reads on refresh() too, so freshly-saved onboarding answers are picked up
+  // immediately after finishing the flow (not just on the next user change).
   useEffect(() => {
     let active = true;
     AsyncStorage.getItem('userData').then((v) => {
@@ -113,7 +122,7 @@ export function ProfileProvider({ children }: { children: React.ReactNode }) {
     return () => {
       active = false;
     };
-  }, [userId]);
+  }, [userId, nonce]);
 
   // one-time onboarding → profile sync (skips if already onboarded elsewhere)
   const syncedFor = useRef<string | null>(null);
@@ -134,8 +143,8 @@ export function ProfileProvider({ children }: { children: React.ReactNode }) {
   }, [userId, refresh]);
 
   const value = useMemo<ProfileCtx>(
-    () => ({ row, local, loading, refresh }),
-    [row, local, loading, refresh]
+    () => ({ row, local, loading, loadFailed, refresh }),
+    [row, local, loading, loadFailed, refresh]
   );
 
   return <Context.Provider value={value}>{children}</Context.Provider>;

@@ -118,13 +118,11 @@ export default function RecipesScreen() {
                 : 'Scan your fridge to get recipe ideas.'}
             </Txt>
           </View>
-          {ingredients.length > 0 && (
+          <View style={{ flexDirection: 'row', gap: 8, marginTop: 6 }}>
             <Pressable
-              onPress={regenerate}
-              disabled={loading}
+              onPress={() => nav.go('fridge')}
               accessibilityRole="button"
-              accessibilityLabel="Regenerate recipes"
-              accessibilityState={{ disabled: loading }}
+              accessibilityLabel="My fridge"
               style={{
                 width: 42,
                 height: 42,
@@ -134,13 +132,33 @@ export default function RecipesScreen() {
                 borderColor: theme.border,
                 alignItems: 'center',
                 justifyContent: 'center',
-                marginTop: 6,
-                opacity: loading ? 0.5 : 1,
               }}
             >
-              <Icon name="sparkle" size={19} color={theme.primary} stroke={1.7} />
+              <Icon name="fridge" size={19} color={theme.primary} stroke={1.7} />
             </Pressable>
-          )}
+            {ingredients.length > 0 && (
+              <Pressable
+                onPress={regenerate}
+                disabled={loading}
+                accessibilityRole="button"
+                accessibilityLabel="Regenerate recipes"
+                accessibilityState={{ disabled: loading }}
+                style={{
+                  width: 42,
+                  height: 42,
+                  borderRadius: 21,
+                  backgroundColor: theme.surface,
+                  borderWidth: 1.5,
+                  borderColor: theme.border,
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  opacity: loading ? 0.5 : 1,
+                }}
+              >
+                <Icon name="sparkle" size={19} color={theme.primary} stroke={1.7} />
+              </Pressable>
+            )}
+          </View>
         </View>
 
         {/* empty fridge */}
@@ -224,7 +242,7 @@ export default function RecipesScreen() {
                 <Txt w={800} size={13.5} color={theme.ink}>
                   {generated.length} recipes
                 </Txt>{' '}
-                tailored to what you have{allergies.length ? ' — allergy-safe' : ''}.
+                tailored to what you have{allergies.length ? ' — allergy-aware' : ''}.
               </Txt>
             </View>
 
@@ -239,6 +257,16 @@ export default function RecipesScreen() {
                 />
               ))}
             </View>
+
+            <Txt
+              w={500}
+              size={12}
+              color={theme.inkSec}
+              style={{ paddingHorizontal: 30, paddingTop: 18, textAlign: 'center', lineHeight: 17 }}
+            >
+              Recipes and nutrition are AI-generated estimates. Always check ingredients for allergens
+              before cooking.
+            </Txt>
           </>
         )}
       </ScrollView>

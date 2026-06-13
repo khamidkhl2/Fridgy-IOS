@@ -184,9 +184,12 @@ export default function RecipeScreen() {
         {/* ingredients (tap to check off) */}
         {recipe.ingredients.length > 0 && (
           <View style={{ paddingHorizontal: 22, paddingTop: 24 }}>
-            <H size={20} style={{ marginBottom: 12 }}>
+            <H size={20} style={{ marginBottom: 6 }}>
               Ingredients
             </H>
+            <Txt w={500} size={12} color={theme.inkSec} style={{ marginBottom: 12, lineHeight: 17 }}>
+              AI-generated — double-check ingredients and quantities, especially for allergens.
+            </Txt>
             <View style={{ gap: 4 }}>
               {recipe.ingredients.map((ing, i) => {
                 const on = checked[i];

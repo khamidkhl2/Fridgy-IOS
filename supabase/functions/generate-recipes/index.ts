@@ -126,7 +126,9 @@ async function generateWithOpenAI(prompt: string, apiKey: string): Promise<Recip
     body: JSON.stringify({
       model,
       temperature: 0.6,
-      max_tokens: 1800,
+      // Headroom so a full set of recipes (with steps) isn't truncated mid-JSON,
+      // which would otherwise fail JSON.parse and surface as an error.
+      max_tokens: 2500,
       response_format: { type: 'json_object' },
       messages: [{ role: 'user', content: prompt }],
     }),
@@ -164,8 +166,9 @@ Deno.serve(async (req: Request) => {
     const recipes = await generateRecipes(body);
     return json({ recipes });
   } catch (err) {
+    // Log the real error (OpenAI status, JSON parse failure, etc.) for
+    // diagnosis, but never leak raw provider/parse text to the user.
     console.error('generate-recipes failed:', err);
-    const message = err instanceof Error ? err.message : 'Generation failed';
-    return json({ error: message }, 502);
+    return json({ error: "We couldn't generate recipes right now. Please try again." }, 502);
   }
 });

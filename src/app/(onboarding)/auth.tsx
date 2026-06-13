@@ -5,13 +5,14 @@ import { ActivityIndicator, Alert, Linking, Platform, Pressable, View } from 're
 import Svg, { Path } from 'react-native-svg';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { H } from '@/components/Headline';
-import { LeafMark } from '@/components/LeafMark';
+import { BrandMark } from '@/components/BrandMark';
 import { ScreenBg } from '@/components/ScreenBg';
 import { Txt } from '@/components/Txt';
 import { useAuth } from '@/lib/auth';
 import { fetchProfile, saveOnboardingToProfile } from '@/lib/db';
 import { PRIVACY_URL, TERMS_URL } from '@/lib/links';
 import { useGo, useOnboarding } from '@/lib/onboarding';
+import { useProfileRow } from '@/lib/profile';
 import { supabase } from '@/lib/supabase';
 import { useTheme } from '@/theme/ThemeProvider';
 
@@ -91,6 +92,7 @@ export default function AuthScreen() {
   const { theme } = useTheme();
   const { finish, data: onboardingData } = useOnboarding();
   const { signInWithOAuth, signInWithApple, session } = useAuth();
+  const { refresh: refreshProfile } = useProfileRow();
   const go = useGo();
   const params = useLocalSearchParams<{ mode?: string }>();
   const insets = useSafeAreaInsets();
@@ -102,22 +104,31 @@ export default function AuthScreen() {
   // final step of onboarding, where answers are saved to the account.
   const signInMode = params.mode === 'signin';
 
-  // Completion path for onboarding (native): once a session exists — whether the
-  // user just signed in here, or arrived already signed in (routed back into
-  // onboarding after a "sign in" with no plan) — save the plan and enter the app.
+  // Finishing onboarding while already authenticated — either the user just
+  // signed in here (default mode), or they signed in first and were routed back
+  // through onboarding to build a plan. There's nothing left to sign into, so we
+  // skip the auth buttons entirely: persist the plan, refresh the profile so the
+  // new targets/answers are live everywhere, and enter the app. Runs on web and
+  // native (no OAuth redirect needed since the session already exists).
+  const finishing = !signInMode && !!session?.user;
   const completed = useRef(false);
   useEffect(() => {
-    if (signInMode || completed.current || Platform.OS === 'web') return;
-    const user = session?.user;
-    if (!user) return;
+    if (!finishing || completed.current) return;
     completed.current = true;
+    const userId = session!.user.id;
     (async () => {
       await finish();
-      await saveOnboardingToProfile(user.id, onboardingData);
+      // Don't clobber an already-set-up profile with the in-memory defaults.
+      const existing = await fetchProfile(userId);
+      if (!existing?.onboarded) await saveOnboardingToProfile(userId, onboardingData);
+      refreshProfile();
       go.replace('/home');
-    })();
+    })().catch(() => {
+      // best-effort: the local cache still drives the app + the launch gate
+      go.replace('/home');
+    });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [session?.user?.id, signInMode]);
+  }, [finishing]);
 
   const onOAuth = async (provider: 'google' | 'apple') => {
     setError(null);
@@ -155,6 +166,18 @@ export default function AuthScreen() {
     }
   };
 
+  // Already authenticated and finishing onboarding: show a brief loader instead
+  // of the sign-in buttons while we save the plan and route into the app.
+  if (finishing) {
+    return (
+      <ScreenBg>
+        <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
+          <ActivityIndicator color={theme.primary} />
+        </View>
+      </ScreenBg>
+    );
+  }
+
   return (
     <ScreenBg>
       <View
@@ -167,7 +190,7 @@ export default function AuthScreen() {
       >
         {/* brand + heading */}
         <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
-          <LeafMark size={62} />
+          <BrandMark size={62} />
           <H size={34} style={{ marginTop: 24, textAlign: 'center' }}>
             {signInMode ? 'Welcome back' : 'Your plan is ready'}
           </H>

@@ -108,7 +108,10 @@ Deno.serve(async (req: Request) => {
   const pageSize = Math.min(Math.max(body.pageSize ?? 25, 1), 50);
 
   const apiKey = Deno.env.get('USDA_API_KEY');
-  if (!apiKey) return json({ error: 'Food search is not configured (missing USDA_API_KEY).' }, 500);
+  if (!apiKey) {
+    console.error('usda-search misconfigured: USDA_API_KEY is not set');
+    return json({ error: 'Food search is temporarily unavailable. Please try again later.' }, 500);
+  }
 
   const url =
     `${BASE}/foods/search?api_key=${apiKey}` +

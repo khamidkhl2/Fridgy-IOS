@@ -25,6 +25,14 @@ export default function AllergiesScreen() {
   const { data, update } = useOnboarding();
   const go = useGo();
 
+  // Pescatarian's only animal protein is seafood — flag (don't block) a fish or
+  // shellfish allergy so the user knows their plan will effectively skip seafood.
+  const seafoodAllergy = data.allergies.includes('Fish') || data.allergies.includes('Shellfish');
+  const notice =
+    data.dietaryStyles.includes('Pescatarian') && seafoodAllergy
+      ? "You chose Pescatarian but flagged a fish/shellfish allergy — we'll keep seafood out, so your recipes will be mostly vegetarian."
+      : null;
+
   return (
     <MultiSelectScreen
       step={stepOf('allergies')}
@@ -36,6 +44,7 @@ export default function AllergiesScreen() {
       otherPlaceholder="e.g. mango, garlic…"
       selected={data.allergies}
       custom={data.customAllergy}
+      notice={notice}
       onSelectedChange={(fn) => update((prev) => ({ allergies: fn(prev.allergies) }))}
       onCustomChange={(v) => update({ customAllergy: v })}
       onBack={go.back}

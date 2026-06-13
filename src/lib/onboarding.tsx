@@ -52,6 +52,24 @@ const DEFAULTS: OnboardingData = {
 const KEY_DATA = 'userData';
 const KEY_DONE = 'onboardingComplete';
 
+/**
+ * Primary eating patterns — you follow at most one. Picking a second swaps it for
+ * the first (you can't be both Keto and Vegetarian, Vegan and Pescatarian, etc.).
+ * The remaining dietary options (Gluten-free, Dairy-free, Halal, Kosher, Low
+ * FODMAP, Other) are add-on restrictions that combine freely with a base pattern.
+ * Shared by the onboarding dietary screen and Edit Profile so they stay in sync.
+ */
+export const DIET_PRIMARY_GROUP = [
+  'Vegetarian',
+  'Vegan',
+  'Pescatarian',
+  'Flexitarian',
+  'Mediterranean',
+  'Keto / Low-carb',
+  'Paleo',
+  'Whole30',
+] as const;
+
 /** A flat patch, or a function of the latest state → patch (for safe concurrent merges). */
 export type OnboardingPatch =
   | Partial<OnboardingData>
@@ -72,9 +90,12 @@ export function OnboardingProvider({ children }: { children: React.ReactNode }) 
   const [data, setData] = useState<OnboardingData>(DEFAULTS);
   const [isOnboarded, setIsOnboarded] = useState<boolean | null>(null);
 
-  // keep a live ref so finish() always persists the latest answers
+  // keep a live ref so finish() always persists the latest answers (updated in an
+  // effect, not during render, so it never trips the refs-during-render rule)
   const dataRef = useRef(data);
-  dataRef.current = data;
+  useEffect(() => {
+    dataRef.current = data;
+  }, [data]);
 
   useEffect(() => {
     AsyncStorage.getItem(KEY_DONE)

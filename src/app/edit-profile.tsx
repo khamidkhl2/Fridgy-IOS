@@ -10,7 +10,7 @@ import { Txt } from '@/components/Txt';
 import { useAuth } from '@/lib/auth';
 import { onboardingToProfile, updateProfile, type ProfileRow } from '@/lib/db';
 import { useNav } from '@/lib/nav';
-import type { OnboardingData } from '@/lib/onboarding';
+import { DIET_PRIMARY_GROUP, type OnboardingData } from '@/lib/onboarding';
 import { useProfileRow } from '@/lib/profile';
 import { ageFromISO, computeTargets } from '@/lib/targets';
 import { useTheme } from '@/theme/ThemeProvider';
@@ -23,12 +23,15 @@ const DIETARY = [
   'Keto / Low-carb', 'Paleo', 'Gluten-free', 'Dairy-free', 'Halal', 'Kosher', 'Whole30', 'Low FODMAP',
 ];
 const DIETARY_EXCLUSIVE = 'No restrictions';
+// Primary eating patterns are mutually exclusive — picking one swaps out another.
+const DIETARY_GROUPS: readonly (readonly string[])[] = [DIET_PRIMARY_GROUP];
 const TRAINING = [
   'Weightlifting', 'Running', 'Cycling', 'Swimming', 'Yoga', 'Pilates', 'HIIT', 'CrossFit',
   'Boxing / MMA', 'Team sports', 'Tennis', 'Climbing', 'Rowing', 'Walking', 'Dance / Zumba',
   'Calisthenics', "I don't train",
 ];
 const TRAINING_EXCLUSIVE = "I don't train";
+const MAX_PICKS = 3; // cap on dietary styles / training types
 
 const LBS_PER_KG = 2.2046226218;
 const IN_PER_CM = 0.3937007874;
@@ -89,12 +92,23 @@ function EditForm({ effective }: { effective: Partial<ProfileRow> | null }) {
   });
   const [saving, setSaving] = useState(false);
 
-  // toggle with an optional mutually-exclusive id (e.g. "No restrictions")
-  const toggleExclusive = (list: string[], id: string, exclusive: string): string[] => {
+  // toggle with a mutually-exclusive id (e.g. "No restrictions"), optional
+  // mutually-exclusive groups (a new pick swaps out a sibling), and a max cap;
+  // deselecting is always allowed, adding past the cap is ignored.
+  const toggleExclusive = (
+    list: string[],
+    id: string,
+    exclusive: string,
+    max: number,
+    groups?: readonly (readonly string[])[]
+  ): string[] => {
     if (id === exclusive) return list.includes(id) ? [] : [id];
-    return list.includes(id)
-      ? list.filter((x) => x !== id)
-      : [...list.filter((x) => x !== exclusive), id];
+    if (list.includes(id)) return list.filter((x) => x !== id);
+    let base = list.filter((x) => x !== exclusive);
+    const group = groups?.find((g) => g.includes(id));
+    if (group) base = base.filter((x) => !group.includes(x)); // swap within the group
+    if (base.length >= max) return list; // at cap — ignore
+    return [...base, id];
   };
 
   const save = async () => {
@@ -200,14 +214,19 @@ function EditForm({ effective }: { effective: Partial<ProfileRow> | null }) {
         <MultiChips
           options={DIETARY}
           selected={dietary}
-          onToggle={(id) => setDietary((d) => toggleExclusive(d, id, DIETARY_EXCLUSIVE))}
+          max={MAX_PICKS}
+          exclusive={DIETARY_EXCLUSIVE}
+          groups={DIETARY_GROUPS}
+          onToggle={(id) => setDietary((d) => toggleExclusive(d, id, DIETARY_EXCLUSIVE, MAX_PICKS, DIETARY_GROUPS))}
         />
 
         <Label>Training</Label>
         <MultiChips
           options={TRAINING}
           selected={training}
-          onToggle={(id) => setTraining((t) => toggleExclusive(t, id, TRAINING_EXCLUSIVE))}
+          max={MAX_PICKS}
+          exclusive={TRAINING_EXCLUSIVE}
+          onToggle={(id) => setTraining((t) => toggleExclusive(t, id, TRAINING_EXCLUSIVE, MAX_PICKS))}
         />
       </ScrollView>
 
@@ -271,31 +290,62 @@ function Chips({ options, value, onSelect }: { options: string[]; value: string;
   );
 }
 
-function MultiChips({ options, selected, onToggle }: { options: string[]; selected: string[]; onToggle: (id: string) => void }) {
+function MultiChips({
+  options,
+  selected,
+  onToggle,
+  max,
+  exclusive,
+  groups,
+}: {
+  options: string[];
+  selected: string[];
+  onToggle: (id: string) => void;
+  max?: number;
+  exclusive?: string;
+  groups?: readonly (readonly string[])[];
+}) {
   const { theme } = useTheme();
+  const count = selected.filter((x) => x !== exclusive).length;
+  const atCap = max != null && count >= max;
+  // A pick that swaps out a chosen sibling keeps the count flat — allow it at cap.
+  const replacesSibling = (id: string) => {
+    const group = groups?.find((g) => g.includes(id));
+    return !!group && selected.some((s) => s !== id && group.includes(s));
+  };
   return (
-    <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
-      {options.map((o) => {
-        const on = selected.includes(o);
-        return (
-          <Pressable
-            key={o}
-            onPress={() => onToggle(o)}
-            style={{
-              paddingVertical: 9,
-              paddingHorizontal: 13,
-              borderRadius: 12,
-              borderWidth: 1.5,
-              borderColor: on ? theme.primary : theme.border,
-              backgroundColor: on ? theme.primarySoft : theme.surface,
-            }}
-          >
-            <Txt w={700} size={13} color={on ? theme.primary : theme.ink}>
-              {o}
-            </Txt>
-          </Pressable>
-        );
-      })}
+    <View>
+      {max != null && (
+        <Txt w={700} size={12.5} color={atCap ? theme.primary : theme.inkSec} style={{ marginBottom: 9 }}>
+          {count} of {max} selected{atCap ? ' · max reached' : ''}
+        </Txt>
+      )}
+      <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
+        {options.map((o) => {
+          const on = selected.includes(o);
+          const blocked = !on && atCap && o !== exclusive && !replacesSibling(o);
+          return (
+            <Pressable
+              key={o}
+              onPress={() => onToggle(o)}
+              disabled={blocked}
+              style={{
+                paddingVertical: 9,
+                paddingHorizontal: 13,
+                borderRadius: 12,
+                opacity: blocked ? 0.4 : 1,
+                borderWidth: 1.5,
+                borderColor: on ? theme.primary : theme.border,
+                backgroundColor: on ? theme.primarySoft : theme.surface,
+              }}
+            >
+              <Txt w={700} size={13} color={on ? theme.primary : theme.ink}>
+                {o}
+              </Txt>
+            </Pressable>
+          );
+        })}
+      </View>
     </View>
   );
 }

@@ -1,10 +1,12 @@
 /** Screen 3 — Home / Kitchen dashboard. Calorie ring, macro mini-rings, today's meals. */
 import { useRouter, type Href } from 'expo-router';
-import { Alert, Pressable, ScrollView, View } from 'react-native';
+import { useState } from 'react';
+import { Alert, Modal, Pressable, ScrollView, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { Field } from '@/components/Field';
 import { H } from '@/components/Headline';
 import { Icon, type IconName } from '@/components/Icon';
-import { LeafMark } from '@/components/LeafMark';
+import { PrimaryButton } from '@/components/PrimaryButton';
 import { Ring } from '@/components/Ring';
 import { ScreenBg } from '@/components/ScreenBg';
 import { Txt } from '@/components/Txt';
@@ -23,16 +25,10 @@ import {
   type FoodLog,
   type MealType,
 } from '@/lib/food';
-import { useProfile, useProfileRow, useTargets } from '@/lib/profile';
-import { formatWater, servingMl, useWaterToday, useWaterUnit, waterGoalMl } from '@/lib/water';
+import { useProfileRow, useTargets } from '@/lib/profile';
+import { formatWater, fromUnit, servingMl, useWaterToday, useWaterUnit, waterGoalMl, type WaterUnit } from '@/lib/water';
 import { useTheme } from '@/theme/ThemeProvider';
 import type { Theme } from '@/theme/themes';
-
-function greetingFor(hour: number): string {
-  if (hour < 12) return 'Good morning';
-  if (hour < 18) return 'Good afternoon';
-  return 'Good evening';
-}
 
 const MACRO_META: { key: 'protein' | 'carbs' | 'fat'; label: string; icon: IconName; soft: keyof Theme }[] = [
   { key: 'protein', label: 'Protein', icon: 'drumstick', soft: 'proteinSoft' },
@@ -57,11 +53,9 @@ const clamp01 = (n: number) => Math.max(0, Math.min(1, n));
 
 export default function DashboardScreen() {
   const { theme } = useTheme();
-  const profile = useProfile();
   const targets = useTargets() ?? FALLBACK_TARGETS;
   const router = useRouter();
   const insets = useSafeAreaInsets();
-  const greeting = greetingFor(new Date().getHours());
 
   const { logs, reload } = useRecentLogs();
   const today = useToday();
@@ -87,6 +81,12 @@ export default function DashboardScreen() {
     trainingTypes: row?.training_types,
   });
   const waterProgress = clamp01(water.totalMl / waterGoal);
+  const [waterModalOpen, setWaterModalOpen] = useState(false);
+
+  const addWater = (ml: number) =>
+    water.add(ml).catch(() => Alert.alert("Couldn't save water", 'Please check your connection and try again.'));
+  const undoWater = () =>
+    water.undo().catch(() => Alert.alert("Couldn't update water", 'Please check your connection and try again.'));
 
   const addTo = (meal: MealType) =>
     router.push(`/add-food?meal=${meal}&date=${today}` as Href);
@@ -120,10 +120,7 @@ export default function DashboardScreen() {
             paddingHorizontal: 22,
           }}
         >
-          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 9 }}>
-            <LeafMark size={28} />
-            <H size={25}>Fridgy</H>
-          </View>
+          <H size={32} style={{ letterSpacing: -0.3 }}>Kitchen</H>
           <View
             style={{
               flexDirection: 'row',
@@ -141,16 +138,6 @@ export default function DashboardScreen() {
               {streak}
             </Txt>
           </View>
-        </View>
-
-        {/* greeting */}
-        <View style={{ paddingHorizontal: 22, paddingTop: 18 }}>
-          <Txt w={600} size={14} color={theme.inkSec}>
-            {greeting},
-          </Txt>
-          <H size={28} style={{ marginTop: 1 }}>
-            {profile.firstName}
-          </H>
         </View>
 
         {/* week strip */}
@@ -299,16 +286,21 @@ export default function DashboardScreen() {
               >
                 <Icon name="droplet" size={22} color={theme.fat} stroke={1.8} />
               </View>
-              <View style={{ flex: 1 }}>
+              <Pressable
+                onPress={() => setWaterModalOpen(true)}
+                accessibilityRole="button"
+                accessibilityLabel="Add a custom water amount"
+                style={{ flex: 1 }}
+              >
                 <Txt w={800} size={15.5} color={theme.ink}>
                   Water
                 </Txt>
                 <Txt w={600} size={13} color={theme.inkSec} style={{ marginTop: 2 }}>
                   {formatWater(water.totalMl, waterUnit)} of {formatWater(waterGoal, waterUnit)}
                 </Txt>
-              </View>
+              </Pressable>
               <Pressable
-                onPress={water.undo}
+                onPress={undoWater}
                 accessibilityRole="button"
                 accessibilityLabel="Remove last drink"
                 style={{
@@ -323,7 +315,7 @@ export default function DashboardScreen() {
                 <View style={{ width: 16, height: 2.4, borderRadius: 2, backgroundColor: theme.inkSec }} />
               </Pressable>
               <Pressable
-                onPress={() => water.add(servingMl(waterUnit))}
+                onPress={() => addWater(servingMl(waterUnit))}
                 accessibilityRole="button"
                 accessibilityLabel="Add water"
                 style={{
@@ -346,12 +338,9 @@ export default function DashboardScreen() {
 
         {/* today's meals */}
         <View style={{ paddingHorizontal: 22, paddingTop: 24 }}>
-          <H size={22} style={{ marginBottom: 4 }}>
+          <H size={22} style={{ marginBottom: 12 }}>
             Today&apos;s meals
           </H>
-          <Txt w={500} size={12.5} color={theme.inkSec} style={{ marginBottom: 12 }}>
-            Tap ＋ to log food · tap an item to edit · hold to remove
-          </Txt>
           <View style={{ gap: 10 }}>
             {MEAL_DEFS.map((def) => {
               const items = byMeal[def.key];
@@ -452,6 +441,105 @@ export default function DashboardScreen() {
           </View>
         </View>
       </ScrollView>
+
+      <WaterAddModal
+        visible={waterModalOpen}
+        unit={waterUnit}
+        onClose={() => setWaterModalOpen(false)}
+        onAdd={addWater}
+      />
     </ScreenBg>
+  );
+}
+
+/** Small popup to log an exact water amount in the user's chosen unit. */
+function WaterAddModal({
+  visible,
+  unit,
+  onClose,
+  onAdd,
+}: {
+  visible: boolean;
+  unit: WaterUnit;
+  onClose: () => void;
+  onAdd: (ml: number) => void;
+}) {
+  const { theme } = useTheme();
+  const [value, setValue] = useState('');
+
+  const close = () => {
+    setValue('');
+    onClose();
+  };
+
+  const presets = unit === 'glasses' ? [1, 2, 3] : unit === 'oz' ? [8, 12, 16] : [200, 250, 500];
+  const unitName = unit === 'glasses' ? 'glasses' : unit;
+
+  const submit = () => {
+    const v = Number(value);
+    if (!Number.isFinite(v) || v <= 0) return;
+    onAdd(fromUnit(v, unit));
+    close();
+  };
+
+  return (
+    <Modal visible={visible} transparent animationType="fade" onRequestClose={close}>
+      <Pressable
+        onPress={close}
+        style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.45)', justifyContent: 'center', paddingHorizontal: 28 }}
+      >
+        {/* inner stops the backdrop press from closing */}
+        <Pressable onPress={() => {}} style={{ backgroundColor: theme.surface, borderRadius: 24, padding: 22 }}>
+          <H size={22}>Add water</H>
+          <Txt w={500} size={13.5} color={theme.inkSec} style={{ marginTop: 4, marginBottom: 16 }}>
+            Enter an amount in {unitName}.
+          </Txt>
+
+          <Field
+            value={value}
+            onChangeText={setValue}
+            keyboardType="numeric"
+            placeholder={`e.g. ${presets[1]}`}
+            returnKeyType="done"
+            onSubmitEditing={submit}
+          />
+
+          <View style={{ flexDirection: 'row', gap: 8, marginTop: 12 }}>
+            {presets.map((p) => (
+              <Pressable
+                key={p}
+                onPress={() => setValue(String(p))}
+                accessibilityRole="button"
+                accessibilityLabel={`${p} ${unitName}`}
+                style={{
+                  flex: 1,
+                  alignItems: 'center',
+                  paddingVertical: 11,
+                  borderRadius: 12,
+                  borderWidth: 1.5,
+                  borderColor: value === String(p) ? theme.fat : theme.border,
+                  backgroundColor: theme.bg,
+                }}
+              >
+                <Txt w={700} size={14} color={theme.ink}>
+                  {p}
+                </Txt>
+              </Pressable>
+            ))}
+          </View>
+
+          <View style={{ marginTop: 18 }}>
+            <PrimaryButton onPress={submit} disabled={!Number(value)}>
+              Add water
+            </PrimaryButton>
+          </View>
+          <Pressable onPress={close} style={{ paddingVertical: 10, marginTop: 6 }}>
+            <Txt w={700} size={14.5} color={theme.inkSec} style={{ textAlign: 'center' }}>
+              Cancel
+            </Txt>
+          </Pressable>
+        </Pressable>
+      </Pressable>
+    </Modal>
   );
 }

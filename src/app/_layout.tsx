@@ -6,6 +6,7 @@ import * as SplashScreen from 'expo-splash-screen';
 import { StatusBar } from 'expo-status-bar';
 import { useEffect } from 'react';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
+import { ErrorBoundary } from '@/components/ErrorBoundary';
 import { AuthProvider } from '@/lib/auth';
 import { OnboardingProvider } from '@/lib/onboarding';
 import { PreferenceSync } from '@/lib/preferences';
@@ -35,11 +36,14 @@ function RootNavigator() {
           name="scan"
           options={{ animation: 'fade', contentStyle: { backgroundColor: '#141513' } }}
         />
+        <Stack.Screen
+          name="scan-meal"
+          options={{ animation: 'fade', contentStyle: { backgroundColor: '#141513' } }}
+        />
         <Stack.Screen name="add-food" options={{ presentation: 'modal' }} />
         <Stack.Screen name="settings" />
         <Stack.Screen name="fridge" />
         <Stack.Screen name="saved-recipes" />
-        <Stack.Screen name="daily-targets" />
         <Stack.Screen name="recipe" />
         <Stack.Screen name="edit-profile" />
         <Stack.Screen name="units" />
@@ -59,18 +63,20 @@ export default function RootLayout() {
 
   return (
     <SafeAreaProvider>
-      <QueryClientProvider client={queryClient}>
-        <ThemeProvider>
-          <AuthProvider>
-            <ProfileProvider>
-              <PreferenceSync />
-              <OnboardingProvider>
-                <RootNavigator />
-              </OnboardingProvider>
-            </ProfileProvider>
-          </AuthProvider>
-        </ThemeProvider>
-      </QueryClientProvider>
+      <ErrorBoundary>
+        <QueryClientProvider client={queryClient}>
+          <ThemeProvider>
+            <AuthProvider>
+              <ProfileProvider>
+                <PreferenceSync />
+                <OnboardingProvider>
+                  <RootNavigator />
+                </OnboardingProvider>
+              </ProfileProvider>
+            </AuthProvider>
+          </ThemeProvider>
+        </QueryClientProvider>
+      </ErrorBoundary>
     </SafeAreaProvider>
   );
 }

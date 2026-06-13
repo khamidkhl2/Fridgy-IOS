@@ -1,5 +1,5 @@
 /** Add-food modal — search USDA FoodData Central, pick a portion, log it to a meal. */
-import { router, useLocalSearchParams } from 'expo-router';
+import { router, useLocalSearchParams, type Href } from 'expo-router';
 import { useEffect, useMemo, useState } from 'react';
 import { ActivityIndicator, Alert, Pressable, ScrollView, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -13,10 +13,14 @@ import { useAuth } from '@/lib/auth';
 import {
   addFoodLog,
   getEditLog,
+  gramsToUnit,
   localDateISO,
   MEALS,
+  stepGrams,
   updateFoodLog,
+  useFoodUnit,
   type FoodLog,
+  type FoodUnit,
   type MealType,
 } from '@/lib/food';
 import { useTheme } from '@/theme/ThemeProvider';
@@ -45,6 +49,7 @@ export default function AddFoodScreen() {
   const { theme } = useTheme();
   const insets = useSafeAreaInsets();
   const { session } = useAuth();
+  const [foodUnit] = useFoodUnit();
   const params = useLocalSearchParams<{ meal?: string; date?: string; edit?: string }>();
 
   // Edit mode: a logged food was handed off via setEditLog(). Read it once so a
@@ -171,6 +176,7 @@ export default function AddFoodScreen() {
             hit={selected}
             grams={grams}
             setGrams={setGrams}
+            unit={foodUnit}
             preview={preview!}
             ctaLabel={isEdit ? 'Save changes' : `Add to ${mealLabel}`}
             savingLabel={isEdit ? 'Saving…' : 'Adding…'}
@@ -189,6 +195,26 @@ export default function AddFoodScreen() {
                 autoCorrect={false}
                 returnKeyType="search"
               />
+              <Pressable
+                onPress={() => router.push(`/scan-meal?meal=${meal}&date=${loggedOn}` as Href)}
+                accessibilityRole="button"
+                accessibilityLabel="Scan a meal with the camera"
+                style={{
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: 9,
+                  marginTop: 10,
+                  paddingVertical: 13,
+                  borderRadius: 14,
+                  backgroundColor: theme.primarySoft,
+                }}
+              >
+                <Icon name="camera" size={18} color={theme.primary} stroke={2} />
+                <Txt w={700} size={14.5} color={theme.primary}>
+                  Scan a meal with camera
+                </Txt>
+              </Pressable>
             </View>
 
             <ScrollView
@@ -291,6 +317,7 @@ function PortionEditor({
   hit,
   grams,
   setGrams,
+  unit,
   preview,
   ctaLabel,
   savingLabel,
@@ -301,6 +328,7 @@ function PortionEditor({
   hit: FoodHit;
   grams: number;
   setGrams: (g: number) => void;
+  unit: FoodUnit;
   preview: { calories: number; protein: number; carbs: number; fat: number };
   ctaLabel: string;
   savingLabel: string;
@@ -309,7 +337,10 @@ function PortionEditor({
   insetBottom: number;
 }) {
   const { theme } = useTheme();
-  const step = (delta: number) => setGrams(Math.max(5, grams + delta));
+  const inc = stepGrams(unit);
+  const step = (dir: number) => setGrams(Math.max(5, grams + dir * inc));
+  const unitLabel = unit === 'oz' ? 'ounces' : 'grams';
+  const stepLabel = unit === 'oz' ? '1 ounce' : '10 grams'; // for the stepper a11y label
 
   const macros: { label: string; value: number; color: string }[] = [
     { label: 'Protein', value: preview.protein, color: theme.protein },
@@ -351,22 +382,22 @@ function PortionEditor({
           marginTop: 24,
         }}
       >
-        <StepBtn kind="dec" onPress={() => step(-10)} />
+        <StepBtn kind="dec" amountLabel={stepLabel} onPress={() => step(-1)} />
         <View style={{ alignItems: 'center', minWidth: 96 }}>
           <Txt w={800} size={30} color={theme.ink} style={{ fontVariant: ['tabular-nums'] }}>
-            {grams}
+            {gramsToUnit(grams, unit)}
           </Txt>
           <Txt w={600} size={13} color={theme.inkSec}>
-            grams
+            {unitLabel}
           </Txt>
         </View>
-        <StepBtn kind="inc" onPress={() => step(10)} />
+        <StepBtn kind="inc" amountLabel={stepLabel} onPress={() => step(1)} />
       </View>
 
       {hit.servingGrams ? (
         <Pressable onPress={() => setGrams(hit.servingGrams!)} style={{ alignSelf: 'center', marginTop: 12 }}>
           <Txt w={700} size={13.5} color={theme.primary}>
-            Reset to {hit.servingGrams} g serving
+            Reset to {gramsToUnit(hit.servingGrams, unit)} {unit} serving
           </Txt>
         </Pressable>
       ) : null}
@@ -404,13 +435,13 @@ function PortionEditor({
   );
 }
 
-function StepBtn({ kind, onPress }: { kind: 'inc' | 'dec'; onPress: () => void }) {
+function StepBtn({ kind, amountLabel, onPress }: { kind: 'inc' | 'dec'; amountLabel: string; onPress: () => void }) {
   const { theme } = useTheme();
   return (
     <Pressable
       onPress={onPress}
       accessibilityRole="button"
-      accessibilityLabel={kind === 'inc' ? 'Increase portion by 10 grams' : 'Decrease portion by 10 grams'}
+      accessibilityLabel={kind === 'inc' ? `Increase portion by ${amountLabel}` : `Decrease portion by ${amountLabel}`}
       style={{
         width: 52,
         height: 52,

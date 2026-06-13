@@ -4,19 +4,14 @@
  */
 import { useQuery } from '@tanstack/react-query';
 import { useAuth } from './auth';
+import type { Tables } from './database.types';
 import { invalidate, qk } from './queryClient';
 import { supabase } from './supabase';
 
-export type FridgeItem = {
-  id: string;
-  user_id: string;
-  name: string;
-  quantity: string | null;
-  category: string | null;
+/** A row of `public.fridge_items` (generated); `source` refined to its two
+ *  app values (DB stores plain text under a check constraint). */
+export type FridgeItem = Omit<Tables<'fridge_items'>, 'source'> & {
   source: 'manual' | 'scan';
-  added_at: string;
-  expires_at: string | null;
-  created_at: string;
 };
 
 /** A detected/entered ingredient before it's persisted. */

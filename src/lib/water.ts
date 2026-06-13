@@ -6,7 +6,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useQuery } from '@tanstack/react-query';
 import { useCallback, useEffect, useReducer } from 'react';
 import { useAuth } from './auth';
-import { localDateISO } from './food';
+import { useToday } from './food';
 import { qk, queryClient } from './queryClient';
 import { supabase } from './supabase';
 import { trainingProfile } from './targets';
@@ -27,6 +27,13 @@ export function toUnit(ml: number, unit: WaterUnit): number {
   if (unit === 'glasses') return Math.round((ml / ML_PER_GLASS) * 10) / 10;
   if (unit === 'oz') return Math.round(ml / ML_PER_OZ);
   return Math.round(ml);
+}
+
+/** Convert a value in the chosen unit back to ml (inverse of toUnit). */
+export function fromUnit(value: number, unit: WaterUnit): number {
+  if (unit === 'glasses') return Math.round(value * ML_PER_GLASS);
+  if (unit === 'oz') return Math.round(value * ML_PER_OZ);
+  return Math.round(value); // ml
 }
 
 export function unitLabel(unit: WaterUnit, plural = true): string {
@@ -113,7 +120,7 @@ export function useWaterToday(): {
 } {
   const { session } = useAuth();
   const userId = session?.user?.id ?? null;
-  const today = localDateISO();
+  const today = useToday(); // live: rolls over at midnight without a restart
 
   const q = useQuery({
     queryKey: qk.water(userId, today),
@@ -129,7 +136,10 @@ export function useWaterToday(): {
       const { error } = await supabase
         .from('water_logs')
         .insert({ user_id: userId, logged_on: today, amount_ml: ml });
-      if (error) queryClient.invalidateQueries({ queryKey: key });
+      if (error) {
+        queryClient.invalidateQueries({ queryKey: key }); // roll back to server truth
+        throw error; // let the caller surface it (the optimistic bump just vanished)
+      }
     },
     [userId, today]
   );
@@ -147,8 +157,9 @@ export function useWaterToday(): {
     const last = data?.[0];
     if (!last) return;
     queryClient.setQueryData<number>(key, (t) => Math.max(0, (t ?? 0) - (last.amount_ml ?? 0))); // optimistic
-    await supabase.from('water_logs').delete().eq('id', last.id);
+    const { error } = await supabase.from('water_logs').delete().eq('id', last.id);
     queryClient.invalidateQueries({ queryKey: key });
+    if (error) throw error;
   }, [userId, today]);
 
   return { totalMl: q.data ?? 0, add, undo, reload: () => void q.refetch() };

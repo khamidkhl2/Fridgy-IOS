@@ -1,4 +1,4 @@
-/** Units — measurement system + water unit. */
+/** Units — measurement system, food portion unit, and water unit. */
 import { useState } from 'react';
 import { Pressable, ScrollView, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -7,6 +7,7 @@ import { ScreenBg } from '@/components/ScreenBg';
 import { Txt } from '@/components/Txt';
 import { useAuth } from '@/lib/auth';
 import { updateProfile } from '@/lib/db';
+import { useFoodUnit, type FoodUnit } from '@/lib/food';
 import { useNav } from '@/lib/nav';
 import { useProfileRow } from '@/lib/profile';
 import { useWaterUnit, type WaterUnit } from '@/lib/water';
@@ -22,6 +23,10 @@ const WATER_UNITS: { id: WaterUnit; label: string }[] = [
   { id: 'ml', label: 'Milliliters' },
   { id: 'oz', label: 'Ounces' },
 ];
+const FOOD_UNITS: { id: FoodUnit; label: string }[] = [
+  { id: 'g', label: 'Grams' },
+  { id: 'oz', label: 'Ounces' },
+];
 
 export default function UnitsScreen() {
   const { theme } = useTheme();
@@ -30,6 +35,7 @@ export default function UnitsScreen() {
   const { session } = useAuth();
   const { row, local, refresh } = useProfileRow();
   const [waterUnit, setWaterUnit] = useWaterUnit();
+  const [foodUnit, setFoodUnit] = useFoodUnit();
 
   const initialMeasure = (row?.unit ?? (local.unit as Measure | undefined) ?? 'imperial') as Measure;
   const [measure, setMeasure] = useState<Measure>(initialMeasure);
@@ -75,6 +81,18 @@ export default function UnitsScreen() {
         />
         <Txt w={500} size={12.5} color={theme.inkSec} style={{ marginTop: 8 }}>
           {measure === 'imperial' ? 'Weight in lb, height in inches.' : 'Weight in kg, height in cm.'}
+        </Txt>
+
+        <View style={{ height: 22 }} />
+
+        <SectionLabel>Food portions</SectionLabel>
+        <Segmented
+          options={FOOD_UNITS.map((u) => ({ id: u.id, label: u.label }))}
+          value={foodUnit}
+          onSelect={(v) => setFoodUnit(v as FoodUnit)}
+        />
+        <Txt w={500} size={12.5} color={theme.inkSec} style={{ marginTop: 8 }}>
+          How portions are shown when logging food.
         </Txt>
 
         <View style={{ height: 22 }} />

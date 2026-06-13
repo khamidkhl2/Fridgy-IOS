@@ -6,9 +6,9 @@ import type { DetectedItem } from './fridge';
 import { functionErrorMessage } from './functions';
 import { supabase } from './supabase';
 
-export async function scanFridge(base64: string): Promise<DetectedItem[]> {
+export async function scanFridge(base64: string, note?: string): Promise<DetectedItem[]> {
   const { data, error } = await supabase.functions.invoke('scan-fridge', {
-    body: { image: base64, mimeType: 'image/jpeg' },
+    body: { image: base64, mimeType: 'image/jpeg', note: note?.trim() || undefined },
   });
   if (error) throw new Error(await functionErrorMessage(error, 'Could not scan your fridge.'));
   if (data?.error) throw new Error(data.error);

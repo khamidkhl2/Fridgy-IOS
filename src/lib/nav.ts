@@ -2,18 +2,18 @@
  * Thin wrapper over expo-router that mirrors the prototype's `nav.go(route)` API,
  * so screen code reads the same as the design source.
  */
-import { useRouter } from 'expo-router';
+import { useRouter, type Href } from 'expo-router';
 
 export type Dest =
   | 'welcome'
   | 'home'
   | 'scan'
+  | 'scanMeal'
   | 'recipes'
   | 'profile'
   | 'settings'
   | 'fridge'
   | 'savedRecipes'
-  | 'dailyTargets'
   | 'editProfile'
   | 'units';
 
@@ -36,6 +36,10 @@ export function useNav() {
       case 'scan':
         router.push('/scan');
         break;
+      case 'scanMeal':
+        // cast: typed-routes cache may lag a freshly-added route file
+        router.push('/scan-meal' as Href);
+        break;
       case 'settings':
         router.push('/settings');
         break;
@@ -44,9 +48,6 @@ export function useNav() {
         break;
       case 'savedRecipes':
         router.push('/saved-recipes');
-        break;
-      case 'dailyTargets':
-        router.push('/daily-targets');
         break;
       case 'editProfile':
         router.push('/edit-profile');

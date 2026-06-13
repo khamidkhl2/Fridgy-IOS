@@ -7,38 +7,17 @@
  * swallows errors and returns null so the app degrades to its local cache when
  * the table is unreachable (offline, or before the migration is applied).
  */
+import type { Tables } from './database.types';
 import type { OnboardingData } from './onboarding';
 import { supabase } from './supabase';
 import { ageFromISO, computeBreakdown, computeTargets, type TargetBreakdown, type Targets } from './targets';
 
-/** A row of `public.profiles` (see supabase/migrations/*_init_schema.sql). */
-export type ProfileRow = {
-  id: string;
-  name: string | null;
-  goal: string | null;
-  dietary_styles: string[];
-  custom_dietary_style: string | null;
-  allergies: string[];
-  custom_allergy: string | null;
-  gender: string | null;
-  birth_date: string | null; // 'YYYY-MM-DD'
-  height_cm: number | null;
-  weight_kg: number | null;
+/**
+ * A row of `public.profiles` (generated from the live schema). The DB stores
+ * `unit` as plain text; we refine it to the two values the app actually writes.
+ */
+export type ProfileRow = Omit<Tables<'profiles'>, 'unit'> & {
   unit: 'imperial' | 'metric';
-  activity_level: string | null;
-  training_types: string[];
-  custom_training_type: string | null;
-  calorie_target: number | null;
-  protein_target_g: number | null;
-  carb_target_g: number | null;
-  fat_target_g: number | null;
-  onboarded: boolean;
-  // synced UI preferences
-  theme_index: number | null;
-  theme_mode: string | null;
-  water_unit: string | null;
-  created_at: string;
-  updated_at: string;
 };
 
 const MONTHS = [
@@ -199,6 +178,24 @@ export async function fetchProfile(userId: string): Promise<ProfileRow | null> {
     .maybeSingle();
   if (error) return null;
   return (data as ProfileRow | null) ?? null;
+}
+
+/**
+ * Like {@link fetchProfile}, but reports whether the query *succeeded*. `ok:false`
+ * means the request failed (offline / flaky network); `ok:true, row:null` means
+ * it succeeded and the user simply has no profile yet. The launch gate uses this
+ * to avoid treating a network blip as "not onboarded" and re-running onboarding.
+ */
+export async function fetchProfileOutcome(
+  userId: string
+): Promise<{ row: ProfileRow | null; ok: boolean }> {
+  const { data, error } = await supabase
+    .from('profiles')
+    .select('*')
+    .eq('id', userId)
+    .maybeSingle();
+  if (error) return { row: null, ok: false };
+  return { row: (data as ProfileRow | null) ?? null, ok: true };
 }
 
 /**

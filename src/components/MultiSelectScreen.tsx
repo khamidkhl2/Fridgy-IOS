@@ -24,11 +24,18 @@ type Props = {
   options: MultiOption[];
   /** Selecting this clears every other choice (e.g. "None"). */
   exclusiveId?: string;
+  /** Sets of mutually-exclusive ids: picking one swaps out any sibling already
+   *  chosen (e.g. only one primary diet at a time). */
+  exclusiveGroups?: readonly (readonly string[])[];
+  /** Max number of (non-exclusive) options selectable. Further picks are blocked. */
+  maxSelect?: number;
   /** Selecting this reveals the custom text field. */
   otherId?: string;
   otherPlaceholder?: string;
   selected: string[];
   custom: string;
+  /** Optional inline note (e.g. flagging a conflict with an earlier answer). */
+  notice?: string | null;
   /** Receives a reducer of the latest selection so concurrent taps don't clobber. */
   onSelectedChange: (updater: (prev: string[]) => string[]) => void;
   onCustomChange: (v: string) => void;
@@ -43,10 +50,13 @@ export function MultiSelectScreen({
   subtitle,
   options,
   exclusiveId,
+  exclusiveGroups,
+  maxSelect,
   otherId,
   otherPlaceholder,
   selected,
   custom,
+  notice,
   onSelectedChange,
   onCustomChange,
   onBack,
@@ -57,11 +67,29 @@ export function MultiSelectScreen({
   const { width } = useWindowDimensions();
   const colW = (Math.min(width, 520) - 22 * 2 - 12) / 2;
 
+  const pickCount = selected.filter((x) => x !== exclusiveId).length;
+  const atCap = maxSelect != null && pickCount >= maxSelect;
+
+  // True when selecting `id` would replace an already-chosen sibling in its
+  // exclusive group — such a pick keeps the count flat, so it's allowed at cap.
+  const replacesSibling = (id: string) => {
+    const group = exclusiveGroups?.find((g) => g.includes(id));
+    return !!group && selected.some((s) => s !== id && group.includes(s));
+  };
+
   const toggle = (id: string) => {
     onSelectedChange((sel) => {
       if (id === exclusiveId) return sel.includes(id) ? [] : [id];
       let next = sel.filter((x) => x !== exclusiveId); // any pick clears the exclusive one
-      next = next.includes(id) ? next.filter((x) => x !== id) : [...next, id];
+      if (next.includes(id)) {
+        next = next.filter((x) => x !== id); // deselect is always allowed
+      } else {
+        // mutually-exclusive group: a new pick replaces any sibling already chosen
+        const group = exclusiveGroups?.find((g) => g.includes(id));
+        if (group) next = next.filter((x) => !group.includes(x));
+        if (maxSelect != null && next.length >= maxSelect) return sel; // at cap — ignore
+        next = [...next, id];
+      }
       return next;
     });
   };
@@ -77,6 +105,28 @@ export function MultiSelectScreen({
             {subtitle}
           </Txt>
         )}
+        {maxSelect != null && (
+          <Txt w={700} size={13} color={atCap ? theme.primary : theme.inkSec} style={{ marginTop: 9 }}>
+            {pickCount} of {maxSelect} selected{atCap ? ' · max reached' : ''}
+          </Txt>
+        )}
+        {notice && (
+          <View
+            style={{
+              flexDirection: 'row',
+              gap: 8,
+              marginTop: 12,
+              padding: 12,
+              borderRadius: 12,
+              backgroundColor: theme.primarySoft,
+            }}
+          >
+            <Icon name="bell" size={16} color={theme.primary} stroke={2} />
+            <Txt w={600} size={13} color={theme.ink} style={{ flex: 1, lineHeight: 18 }}>
+              {notice}
+            </Txt>
+          </View>
+        )}
       </View>
 
       <ScrollView
@@ -88,10 +138,12 @@ export function MultiSelectScreen({
         <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 12 }}>
           {options.map((o) => {
             const on = selected.includes(o.id);
+            const blocked = !on && atCap && o.id !== exclusiveId && !replacesSibling(o.id);
             return (
               <Pressable
                 key={o.id}
                 onPress={() => toggle(o.id)}
+                disabled={blocked}
                 style={{
                   width: colW,
                   flexDirection: 'row',
@@ -100,6 +152,7 @@ export function MultiSelectScreen({
                   paddingVertical: 14,
                   paddingHorizontal: 14,
                   borderRadius: 16,
+                  opacity: blocked ? 0.4 : 1,
                   backgroundColor: on ? theme.primary : theme.surface,
                   borderWidth: 1.5,
                   borderColor: on ? theme.primary : theme.border,

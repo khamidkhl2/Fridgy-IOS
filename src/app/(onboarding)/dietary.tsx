@@ -1,6 +1,6 @@
 /** Onboarding 3 — Dietary style (multi-select). */
 import { MultiSelectScreen, type MultiOption } from '@/components/MultiSelectScreen';
-import { stepOf, useGo, useOnboarding } from '@/lib/onboarding';
+import { DIET_PRIMARY_GROUP, stepOf, useGo, useOnboarding } from '@/lib/onboarding';
 
 const OPTIONS: MultiOption[] = [
   { id: 'No restrictions', emoji: '🚫', label: 'No restrictions' },
@@ -28,9 +28,11 @@ export default function DietaryStyleScreen() {
     <MultiSelectScreen
       step={stepOf('dietary')}
       title="Do you follow a specific diet?"
-      subtitle="Pick any that apply — we'll tailor recipes to match."
+      subtitle="Pick up to 3 — we'll tailor recipes to match."
       options={OPTIONS}
       exclusiveId="No restrictions"
+      exclusiveGroups={[DIET_PRIMARY_GROUP]}
+      maxSelect={3}
       otherId="Other"
       otherPlaceholder="e.g. raw, low-sodium…"
       selected={data.dietaryStyles}

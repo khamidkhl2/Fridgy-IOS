@@ -31,9 +31,10 @@ export default function TrainingTypeScreen() {
     <MultiSelectScreen
       step={stepOf('training')}
       title="How do you train?"
-      subtitle="This fine-tunes your calorie and protein targets."
+      subtitle="Pick up to 3 — this fine-tunes your calorie and protein targets."
       options={OPTIONS}
       exclusiveId="I don't train"
+      maxSelect={3}
       otherId="Other"
       otherPlaceholder="e.g. surfing, polo…"
       selected={data.trainingTypes}

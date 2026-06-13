@@ -5,18 +5,17 @@ import { Icon, type IconName } from '@/components/Icon';
 import { ScreenBg } from '@/components/ScreenBg';
 import { Txt } from '@/components/Txt';
 import { useAuth } from '@/lib/auth';
-import { useFridgeItems } from '@/lib/fridge';
 import { PRIVACY_URL, SUPPORT_EMAIL, TERMS_URL } from '@/lib/links';
 import {
   currentStreak,
   loggedDays,
-  localDateISO,
   logsForDay,
   sumMacros,
   useRecentLogs,
+  useToday,
 } from '@/lib/food';
 import { useNav, type Dest } from '@/lib/nav';
-import { useProfile, useTargets } from '@/lib/profile';
+import { useProfile } from '@/lib/profile';
 import { useSavedRecipes } from '@/lib/recipes';
 import { useTheme } from '@/theme/ThemeProvider';
 import { THEMES } from '@/theme/themes';
@@ -25,21 +24,19 @@ export default function ProfileScreen() {
   const { theme, themeIndex } = useTheme();
   const { signOut, deleteAccount } = useAuth();
   const profile = useProfile();
-  const targets = useTargets();
   const nav = useNav();
   const insets = useSafeAreaInsets();
 
   const { logs } = useRecentLogs();
-  const { count: recipesMade } = useSavedRecipes();
-  const { items: fridgeItems } = useFridgeItems();
-  const today = localDateISO();
+  const { count: savedCount } = useSavedRecipes();
+  const today = useToday();
   const kcalToday = sumMacros(logsForDay(logs, today)).calories;
   const streak = currentStreak(loggedDays(logs), today);
 
   const STATS = [
     { v: String(streak), l: 'Day streak' },
     { v: kcalToday.toLocaleString(), l: 'kcal today' },
-    { v: String(recipesMade), l: 'Recipes made' },
+    { v: String(savedCount), l: 'Saved' },
   ];
 
   const logout = async () => {
@@ -71,23 +68,10 @@ export default function ProfileScreen() {
 
   // grouped: your plan & content → preferences → support & legal
   const rows: { icon: IconName; label: string; detail?: string; go?: Dest; action?: () => void }[] = [
-    { icon: 'user', label: 'Edit profile', go: 'editProfile' },
-    {
-      icon: 'flame',
-      label: 'Daily targets',
-      detail: targets ? `${targets.calories.toLocaleString()} kcal` : undefined,
-      go: 'dailyTargets',
-    },
-    {
-      icon: 'fridge',
-      label: 'My fridge',
-      detail: fridgeItems.length ? `${fridgeItems.length} item${fridgeItems.length > 1 ? 's' : ''}` : undefined,
-      go: 'fridge',
-    },
     {
       icon: 'book',
       label: 'Saved recipes',
-      detail: recipesMade ? String(recipesMade) : undefined,
+      detail: savedCount ? String(savedCount) : undefined,
       go: 'savedRecipes',
     },
     { icon: 'sparkle', label: 'Appearance', detail: THEMES[themeIndex].name, go: 'settings' },
@@ -108,8 +92,13 @@ export default function ProfileScreen() {
         contentContainerStyle={{ paddingTop: insets.top + 10, paddingBottom: 28 }}
         showsVerticalScrollIndicator={false}
       >
-        {/* identity */}
-        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 15, paddingHorizontal: 22 }}>
+        {/* identity — tap to edit profile */}
+        <Pressable
+          onPress={() => nav.go('editProfile')}
+          accessibilityRole="button"
+          accessibilityLabel="Edit profile"
+          style={{ flexDirection: 'row', alignItems: 'center', gap: 15, paddingHorizontal: 22 }}
+        >
           <View
             style={{
               width: 64,
@@ -154,7 +143,10 @@ export default function ProfileScreen() {
               </View>
             ) : null}
           </View>
-        </View>
+          <View style={{ transform: [{ scaleX: -1 }] }}>
+            <Icon name="chevronLeft" size={18} color={theme.inkSec} stroke={2} />
+          </View>
+        </Pressable>
 
         {/* stats */}
         <View style={{ flexDirection: 'row', gap: 11, paddingHorizontal: 22, paddingTop: 20 }}>
