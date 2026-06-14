@@ -40,6 +40,16 @@ export default function UnitsScreen() {
   const initialMeasure = (row?.unit ?? (local.unit as Measure | undefined) ?? 'imperial') as Measure;
   const [measure, setMeasure] = useState<Measure>(initialMeasure);
 
+  // The row may not be loaded at first render; sync the toggle once it arrives
+  // (or changes) so it reflects the saved value instead of staying on the
+  // default. Adjusting state during render — not in an effect — is the idiomatic
+  // way to react to a changed prop without an extra render/paint.
+  const [syncedUnit, setSyncedUnit] = useState(row?.unit);
+  if (row?.unit !== syncedUnit) {
+    setSyncedUnit(row?.unit);
+    if (row?.unit === 'imperial' || row?.unit === 'metric') setMeasure(row.unit);
+  }
+
   const changeMeasure = (m: Measure) => {
     setMeasure(m);
     if (session?.user) updateProfile(session.user.id, { unit: m }).then(refresh);

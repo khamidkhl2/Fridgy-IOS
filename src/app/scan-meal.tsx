@@ -300,6 +300,59 @@ export default function ScanMealScreen() {
   );
 }
 
+/** Description field + "Update estimate" button — re-runs the AI on the same
+ *  photo with the typed hint. Shown in both the normal and empty review states. */
+function RefineRow({
+  note,
+  setNote,
+  refining,
+  onRefine,
+  placeholder,
+}: {
+  note: string;
+  setNote: (v: string) => void;
+  refining: boolean;
+  onRefine: () => void;
+  placeholder: string;
+}) {
+  const { theme } = useTheme();
+  return (
+    <>
+      <Field
+        value={note}
+        onChangeText={setNote}
+        placeholder={placeholder}
+        returnKeyType="done"
+        onSubmitEditing={onRefine}
+        maxLength={300}
+        style={{ height: 48, fontSize: 14, backgroundColor: theme.bg, marginBottom: 8 }}
+      />
+      <Pressable
+        onPress={onRefine}
+        disabled={refining || !note.trim()}
+        accessibilityRole="button"
+        accessibilityLabel="Update estimate from your description"
+        style={{
+          flexDirection: 'row',
+          alignItems: 'center',
+          justifyContent: 'center',
+          gap: 7,
+          height: 46,
+          borderRadius: 14,
+          marginBottom: 14,
+          backgroundColor: theme.primarySoft,
+          opacity: refining || !note.trim() ? 0.5 : 1,
+        }}
+      >
+        <Icon name="sparkle" size={15} color={theme.primary} stroke={1.6} fill={theme.primary} />
+        <Txt w={700} size={14} color={theme.primary}>
+          {refining ? 'Updating…' : 'Update estimate'}
+        </Txt>
+      </Pressable>
+    </>
+  );
+}
+
 function ReviewSheet({
   items,
   meal,
@@ -333,12 +386,19 @@ function ReviewSheet({
   if (empty) {
     return (
       <View>
-        <View style={{ alignItems: 'center', marginBottom: 18 }}>
+        <View style={{ alignItems: 'center', marginBottom: 16 }}>
           <H size={25}>No food detected</H>
-          <Txt w={500} size={14} color={theme.inkSec} style={{ marginTop: 5, textAlign: 'center' }}>
-            Try again with the whole plate in frame and good lighting.
+          <Txt w={500} size={14} color={theme.inkSec} style={{ marginTop: 5, textAlign: 'center', lineHeight: 20 }}>
+            Describe the meal below to try again, or rescan with the whole plate in frame.
           </Txt>
         </View>
+        <RefineRow
+          note={note}
+          setNote={setNote}
+          refining={refining}
+          onRefine={onRefine}
+          placeholder="Describe the meal (optional)"
+        />
         <PrimaryButton onPress={onRescan}>Scan again</PrimaryButton>
       </View>
     );
@@ -417,37 +477,13 @@ function ReviewSheet({
       </ScrollView>
 
       {/* refine the estimate with a description — no need to re-shoot */}
-      <Field
-        value={note}
-        onChangeText={setNote}
+      <RefineRow
+        note={note}
+        setNote={setNote}
+        refining={refining}
+        onRefine={onRefine}
         placeholder="Not quite right? Describe it (optional)"
-        returnKeyType="done"
-        onSubmitEditing={onRefine}
-        maxLength={300}
-        style={{ height: 48, fontSize: 14, backgroundColor: theme.bg, marginBottom: 8 }}
       />
-      <Pressable
-        onPress={onRefine}
-        disabled={refining || !note.trim()}
-        accessibilityRole="button"
-        accessibilityLabel="Update estimate from your description"
-        style={{
-          flexDirection: 'row',
-          alignItems: 'center',
-          justifyContent: 'center',
-          gap: 7,
-          height: 46,
-          borderRadius: 14,
-          marginBottom: 14,
-          backgroundColor: theme.primarySoft,
-          opacity: refining || !note.trim() ? 0.5 : 1,
-        }}
-      >
-        <Icon name="sparkle" size={15} color={theme.primary} stroke={1.6} fill={theme.primary} />
-        <Txt w={700} size={14} color={theme.primary}>
-          {refining ? 'Updating…' : 'Update estimate'}
-        </Txt>
-      </Pressable>
 
       <Txt w={500} size={11.5} color={theme.inkSec} style={{ textAlign: 'center', marginBottom: 12, lineHeight: 16 }}>
         Calorie and macro values are AI estimates. You can edit any item after logging.

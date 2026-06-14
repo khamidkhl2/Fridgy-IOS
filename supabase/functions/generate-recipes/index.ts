@@ -81,7 +81,8 @@ function buildPrompt(body: RequestBody): string {
 
 function num(v: unknown): number {
   const n = typeof v === 'number' ? v : Number(v);
-  return Number.isFinite(n) ? Math.round(n) : 0;
+  // these fields (calories, macros, minutes, usesCount) are all non-negative
+  return Number.isFinite(n) ? Math.max(0, Math.round(n)) : 0;
 }
 
 function normalizeRecipes(raw: unknown): Recipe[] {

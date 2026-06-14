@@ -70,6 +70,7 @@ export function waterGoalMl(opts: {
 const KEY_UNIT = 'fridgy_water_unit';
 let unitValue: WaterUnit = 'glasses';
 let unitLoaded = false;
+let unitDirty = false; // a user change happened — don't let a late load clobber it
 const unitListeners = new Set<() => void>();
 
 export function useWaterUnit(): [WaterUnit, (u: WaterUnit) => void] {
@@ -79,7 +80,7 @@ export function useWaterUnit(): [WaterUnit, (u: WaterUnit) => void] {
     if (!unitLoaded) {
       unitLoaded = true;
       AsyncStorage.getItem(KEY_UNIT).then((v) => {
-        if (v === 'glasses' || v === 'ml' || v === 'oz') {
+        if (!unitDirty && (v === 'glasses' || v === 'ml' || v === 'oz')) {
           unitValue = v;
           unitListeners.forEach((l) => l());
         }
@@ -91,6 +92,7 @@ export function useWaterUnit(): [WaterUnit, (u: WaterUnit) => void] {
   }, []);
 
   const setUnit = (u: WaterUnit) => {
+    unitDirty = true;
     unitValue = u;
     AsyncStorage.setItem(KEY_UNIT, u).catch(() => {});
     unitListeners.forEach((l) => l());

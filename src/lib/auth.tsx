@@ -41,6 +41,15 @@ function createNonce(): string {
   return Array.from(Crypto.getRandomBytes(32), (byte) => byte.toString(16).padStart(2, '0')).join('');
 }
 
+/** Clear per-user local data so the next account starts clean: the onboarding
+ *  cache, the onboarding flag, and any cached recipe sets (keyed per user). */
+async function clearLocalUserData(): Promise<void> {
+  const keys = await AsyncStorage.getAllKeys().catch(() => [] as readonly string[]);
+  const recipeKeys = keys.filter((k) => k.startsWith('recipeCache'));
+  await AsyncStorage.multiRemove(['userData', 'onboardingComplete', ...recipeKeys]).catch(() => {});
+  queryClient.clear();
+}
+
 function appleProfileMetadata(credential: AppleAuthentication.AppleAuthenticationCredential) {
   const fullName = credential.fullName;
   if (!fullName) return null;
@@ -173,8 +182,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       await supabase.auth.signOut();
       // drop the local onboarding cache + cached per-user query data so the next
       // account starts clean (no stale logs/fridge/recipes from the last user)
-      await AsyncStorage.multiRemove(['userData', 'onboardingComplete']).catch(() => {});
-      queryClient.clear();
+      await clearLocalUserData();
     },
     []
   );
@@ -183,10 +191,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     () => async (): Promise<Result> => {
       const { error } = await supabase.functions.invoke('delete-account', { body: {} });
       if (error) return { error };
-      // account is gone server-side — clear the local session + onboarding cache
+      // account is gone server-side — clear the local session + cached user data
       await supabase.auth.signOut().catch(() => {});
-      await AsyncStorage.multiRemove(['userData', 'onboardingComplete']).catch(() => {});
-      queryClient.clear();
+      await clearLocalUserData();
       return { error: null };
     },
     []

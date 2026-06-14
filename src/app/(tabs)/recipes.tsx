@@ -10,6 +10,7 @@ import { PrimaryButton } from '@/components/PrimaryButton';
 import { RecipeCard } from '@/components/RecipeCard';
 import { ScreenBg } from '@/components/ScreenBg';
 import { Txt } from '@/components/Txt';
+import { useAuth } from '@/lib/auth';
 import { useFridgeItems } from '@/lib/fridge';
 import { useNav } from '@/lib/nav';
 import { useProfileRow } from '@/lib/profile';
@@ -35,6 +36,7 @@ export default function RecipesScreen() {
 
   const { items } = useFridgeItems();
   const { row, local } = useProfileRow();
+  const { session } = useAuth();
   const saved = useSavedRecipes();
 
   const ingredients = items.map((i) => i.name);
@@ -54,9 +56,19 @@ export default function RecipesScreen() {
     router.push('/recipe');
   };
 
-  // signature of the current fridge — cached results are reused while it's unchanged
-  const sig = ingredients.map((s) => s.toLowerCase().trim()).sort().join('|');
-  const CACHE_KEY = 'recipeCache';
+  // signature of everything that shapes generation — the fridge contents AND the
+  // user's diet, allergies, and goal. Cached results are reused only while ALL of
+  // these are unchanged, so adding an allergy (or changing diet/goal) regenerates
+  // instead of serving stale, possibly-unsafe recipes for the new constraints.
+  const normList = (xs: string[]) => xs.map((s) => s.toLowerCase().trim()).filter(Boolean).sort().join(',');
+  const sig = [
+    normList(ingredients),
+    normList(dietaryStyles),
+    normList(allergies),
+    (goal ?? '').toLowerCase().trim(),
+  ].join('||');
+  // per-user cache key so two accounts on one device can't read each other's recipes
+  const CACHE_KEY = `recipeCache:${session?.user?.id ?? 'anon'}`;
 
   const run = async (forceFresh: boolean) => {
     if (ingredients.length === 0) return;

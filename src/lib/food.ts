@@ -277,6 +277,7 @@ export function stepGrams(unit: FoodUnit): number {
 const KEY_FOOD_UNIT = 'fridgy_food_unit';
 let foodUnitValue: FoodUnit = 'g';
 let foodUnitLoaded = false;
+let foodUnitDirty = false; // a user change happened — don't let a late load clobber it
 const foodUnitListeners = new Set<() => void>();
 
 /** Tiny global store so Units + add-food stay in sync (AsyncStorage-backed). */
@@ -287,7 +288,7 @@ export function useFoodUnit(): [FoodUnit, (u: FoodUnit) => void] {
     if (!foodUnitLoaded) {
       foodUnitLoaded = true;
       AsyncStorage.getItem(KEY_FOOD_UNIT).then((v) => {
-        if (v === 'g' || v === 'oz') {
+        if (!foodUnitDirty && (v === 'g' || v === 'oz')) {
           foodUnitValue = v;
           foodUnitListeners.forEach((l) => l());
         }
@@ -299,6 +300,7 @@ export function useFoodUnit(): [FoodUnit, (u: FoodUnit) => void] {
   }, []);
 
   const setUnit = (u: FoodUnit) => {
+    foodUnitDirty = true;
     foodUnitValue = u;
     AsyncStorage.setItem(KEY_FOOD_UNIT, u).catch(() => {});
     foodUnitListeners.forEach((l) => l());
