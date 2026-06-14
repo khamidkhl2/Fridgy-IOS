@@ -104,8 +104,8 @@ async function estimateWithOpenAI(dataUrl: string, apiKey: string, note?: string
   }
 
   const data = await res.json();
-  const content: string = data.choices?.[0]?.message?.content ?? '{}';
-  return normalize(JSON.parse(content));
+  const raw: string = data.choices?.[0]?.message?.content ?? '{}';
+  return normalize(JSON.parse(raw));
 }
 
 async function estimateMeal(dataUrl: string, note?: string): Promise<MealItem[]> {

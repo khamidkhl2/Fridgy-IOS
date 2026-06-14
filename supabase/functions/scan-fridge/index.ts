@@ -76,8 +76,8 @@ async function detectWithOpenAI(dataUrl: string, apiKey: string, note?: string):
   }
 
   const data = await res.json();
-  const content: string = data.choices?.[0]?.message?.content ?? '{}';
-  const parsed = JSON.parse(content) as { items?: { name?: unknown; category?: unknown }[] };
+  const raw: string = data.choices?.[0]?.message?.content ?? '{}';
+  const parsed = JSON.parse(raw) as { items?: { name?: unknown; category?: unknown }[] };
 
   return (parsed.items ?? [])
     .map((it) => ({
