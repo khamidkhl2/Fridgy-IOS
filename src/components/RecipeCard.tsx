@@ -1,16 +1,10 @@
 /** Recipe summary card — taps through to the full recipe page; ＋ toggles saved. */
 import { Pressable, View } from 'react-native';
+import { foodEmoji } from '@/lib/foodEmoji';
 import { useTheme } from '@/theme/ThemeProvider';
 import type { RecipeView } from '@/lib/recipes';
-import { Icon, type IconName } from './Icon';
+import { Icon } from './Icon';
 import { Txt } from './Txt';
-
-const MEAL_ICON: Record<string, IconName> = {
-  Breakfast: 'leaf',
-  Lunch: 'drumstick',
-  Dinner: 'wheat',
-  Snack: 'apple',
-};
 
 export function RecipeCard({
   recipe,
@@ -24,7 +18,7 @@ export function RecipeCard({
   onSave: () => void;
 }) {
   const { theme } = useTheme();
-  const icon = MEAL_ICON[recipe.mealType] ?? 'leaf';
+  const emoji = foodEmoji(recipe.title);
 
   return (
     <Pressable
@@ -49,7 +43,7 @@ export function RecipeCard({
           justifyContent: 'center',
         }}
       >
-        <Icon name={icon} size={26} color={theme.primary} stroke={1.7} />
+        <Txt size={30}>{emoji}</Txt>
       </View>
       <View style={{ flex: 1 }}>
         <View

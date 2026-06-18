@@ -18,8 +18,7 @@ const OPTIONS: MultiOption[] = [
   { id: 'Rowing', emoji: '🚣', label: 'Rowing' },
   { id: 'Walking', emoji: '🚶', label: 'Walking' },
   { id: 'Dance / Zumba', emoji: '💃', label: 'Dance / Zumba' },
-  { id: 'Calisthenics', emoji: '🤼', label: 'Calisthenics' },
-  { id: 'Other', emoji: '✏️', label: 'Other' },
+  { id: 'Calisthenics', emoji: '🤸', label: 'Calisthenics' },
   { id: "I don't train", emoji: '💤', label: "I don't train" },
 ];
 
@@ -35,8 +34,6 @@ export default function TrainingTypeScreen() {
       options={OPTIONS}
       exclusiveId="I don't train"
       maxSelect={3}
-      otherId="Other"
-      otherPlaceholder="e.g. surfing, polo…"
       selected={data.trainingTypes}
       custom={data.customTrainingType}
       onSelectedChange={(fn) => update((prev) => ({ trainingTypes: fn(prev.trainingTypes) }))}

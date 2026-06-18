@@ -9,9 +9,14 @@ import { useEffect, useReducer, useState } from 'react';
 import { AppState, type AppStateStatus } from 'react-native';
 import { useAuth } from './auth';
 import type { Tables } from './database.types';
+import { MICRO_KEYS, type MicroKey, type MicroMap } from './micros';
 import { invalidate, qk } from './queryClient';
 import { supabase } from './supabase';
 import type { Macros } from './usda';
+// trainingProfile (targets.ts) no longer needed here — micro selection moved to micros.ts
+
+// Re-exported so existing dashboard imports (`from '@/lib/food'`) keep working.
+export { MICRO_KEYS, MICRO_META, MICRO_INFO, microTarget, pickMicros, type MicroKey, type MicroMap } from './micros';
 
 export type MealType = 'breakfast' | 'lunch' | 'dinner' | 'snack';
 
@@ -42,7 +47,7 @@ export function localDateISO(d: Date = new Date()): string {
   return `${y}-${m}-${day}`;
 }
 
-function addDays(iso: string, delta: number): string {
+export function addDays(iso: string, delta: number): string {
   const d = new Date(`${iso}T00:00:00`);
   d.setDate(d.getDate() + delta);
   return localDateISO(d);
@@ -67,12 +72,14 @@ export type NewFoodLog = {
   mealType: MealType;
   name: string;
   macros: Macros;
+  /** Absolute micros for the logged portion (sparse map of whatever's known). */
+  micros?: MicroMap;
   grams: number;
   source?: FoodLog['source'];
 };
 
 export async function addFoodLog(entry: NewFoodLog): Promise<FoodLog | null> {
-  const { data, error } = await supabase
+  const res = await supabase
     .from('food_logs')
     .insert({
       user_id: entry.userId,
@@ -85,12 +92,13 @@ export async function addFoodLog(entry: NewFoodLog): Promise<FoodLog | null> {
       fat_g: entry.macros.fat,
       quantity: entry.grams,
       source: entry.source ?? 'manual',
+      micros: entry.micros ?? {},
     })
     .select()
     .maybeSingle();
-  if (error) return null;
+  if (res.error) return null;
   invalidate.logs();
-  return (data as FoodLog | null) ?? null;
+  return (res.data as FoodLog | null) ?? null;
 }
 
 export async function deleteFoodLog(id: string): Promise<boolean> {
@@ -202,6 +210,22 @@ export function sumMacros(logs: FoodLog[]): Macros {
   );
 }
 
+// ── micronutrients ────────────────────────────────────────────────────────────
+// (Taxonomy — MicroKey, MICRO_META, microTarget, pickMicros — lives in micros.ts
+// and is re-exported at the top of this file.)
+
+export type MicroTotals = Record<MicroKey, number>;
+
+/** Daily totals across every tracked micro, summed from each log's `micros` map. */
+export function sumMicros(logs: FoodLog[]): MicroTotals {
+  const totals = Object.fromEntries(MICRO_KEYS.map((k) => [k, 0])) as MicroTotals;
+  for (const l of logs) {
+    const m = (l.micros ?? {}) as MicroMap;
+    for (const key of MICRO_KEYS) totals[key] += m[key] ?? 0;
+  }
+  return totals;
+}
+
 export function logsForDay(logs: FoodLog[], dayISO: string): FoodLog[] {
   return logs.filter((l) => l.logged_on === dayISO);
 }
@@ -231,9 +255,61 @@ export function currentStreak(days: Set<string>, todayISO: string = localDateISO
   return streak;
 }
 
+/** Longest run of consecutive logged days, ever. */
+export function longestStreak(days: Set<string>): number {
+  if (days.size === 0) return 0;
+  const sorted = [...days].sort();
+  let best = 1;
+  let run = 1;
+  for (let i = 1; i < sorted.length; i++) {
+    run = addDays(sorted[i - 1], 1) === sorted[i] ? run + 1 : 1;
+    if (run > best) best = run;
+  }
+  return best;
+}
+
 export type DayState = { iso: string; weekday: string; dayNum: number; state: 'done' | 'today' | 'future' };
 
 const WEEKDAY = ['S', 'M', 'T', 'W', 'T', 'F', 'S'];
+
+export type GridDay = {
+  iso: string;
+  weekdayLetter: string;
+  dayNum: number;
+  isToday: boolean;
+  isFuture: boolean;
+  logged: boolean;
+};
+
+/**
+ * A scrollable run of days for the Kitchen week strip: full weeks (Mon–Sun) from
+ * `weeksBefore` weeks ago through `weeksAfter` weeks ahead, each tagged so the
+ * UI can mark today, logged days, and disable the future.
+ */
+export function dayGrid(
+  days: Set<string>,
+  todayISO: string = localDateISO(),
+  weeksBefore = 3,
+  weeksAfter = 1
+): GridDay[] {
+  const today = new Date(`${todayISO}T00:00:00`);
+  const dow = today.getDay(); // 0=Sun
+  const mondayOffset = dow === 0 ? -6 : 1 - dow;
+  const startISO = addDays(todayISO, mondayOffset - weeksBefore * 7);
+  const total = (weeksBefore + 1 + weeksAfter) * 7;
+  return Array.from({ length: total }, (_, i) => {
+    const iso = addDays(startISO, i);
+    const d = new Date(`${iso}T00:00:00`);
+    return {
+      iso,
+      weekdayLetter: WEEKDAY[d.getDay()],
+      dayNum: d.getDate(),
+      isToday: iso === todayISO,
+      isFuture: iso > todayISO,
+      logged: days.has(iso),
+    };
+  });
+}
 
 /** The current Mon–Sun week, each day tagged done/today/future for the strip. */
 export function weekActivity(days: Set<string>, todayISO: string = localDateISO()): DayState[] {

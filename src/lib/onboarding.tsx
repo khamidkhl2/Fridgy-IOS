@@ -138,12 +138,12 @@ export function useOnboarding(): Ctx {
  * loading + auth screens sit outside this list.
  */
 export const DATA_STEPS = [
-  'name',
   'goal',
   'dietary',
   'allergies',
   'gender',
   'birthdate',
+  'measurements',
   'body',
   'activity',
   'training',

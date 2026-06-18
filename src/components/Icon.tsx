@@ -9,7 +9,7 @@ export type IconName =
   | 'flame' | 'trendDown' | 'dumbbell' | 'scale' | 'leaf' | 'drumstick'
   | 'wheat' | 'droplet' | 'plus' | 'home' | 'scan' | 'book' | 'user'
   | 'chevronLeft' | 'close' | 'help' | 'check' | 'bell' | 'sparkle'
-  | 'image' | 'pencil' | 'grid' | 'fridge' | 'bolt' | 'apple' | 'camera';
+  | 'image' | 'pencil' | 'grid' | 'fridge' | 'bolt' | 'apple' | 'camera' | 'chart';
 
 const PATHS: Record<IconName, (color: string) => ReactNode> = {
   flame: () => (
@@ -139,6 +139,12 @@ const PATHS: Record<IconName, (color: string) => ReactNode> = {
       <Path d="M4 8.5A2 2 0 0 1 6 6.5h1.5l1-1.8h5l1 1.8H21a2 2 0 0 1 2 2" />
       <Rect x="3" y="6.5" width="18" height="13" rx="2.5" />
       <Circle cx="12" cy="13" r="3.4" />
+    </>
+  ),
+  chart: () => (
+    <>
+      <Path d="M4 20h16" />
+      <Path d="M6.5 20v-7M12 20V5M17.5 20v-10" />
     </>
   ),
 };

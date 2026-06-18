@@ -1,5 +1,6 @@
-/** Full-width primary pill button with press feedback. */
+/** Full-width primary pill button with press + haptic feedback. */
 import { Pressable, type StyleProp, type ViewStyle } from 'react-native';
+import { haptics } from '@/lib/haptics';
 import { useTheme } from '@/theme/ThemeProvider';
 import { Txt } from './Txt';
 
@@ -16,7 +17,13 @@ export function PrimaryButton({ children, onPress, disabled = false, style, acce
   const { theme } = useTheme();
   return (
     <Pressable
-      onPress={onPress}
+      onPress={
+        onPress &&
+        (() => {
+          haptics.light();
+          onPress();
+        })
+      }
       disabled={disabled}
       accessibilityRole="button"
       accessibilityState={{ disabled }}

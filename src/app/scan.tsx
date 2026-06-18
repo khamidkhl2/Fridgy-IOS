@@ -1,5 +1,6 @@
 /** Screen 4 — Fridge scan. Live camera, capture → AI ingredient detection → save to fridge. */
 import { CameraView, useCameraPermissions } from 'expo-camera';
+import { useIsFocused } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { useRef, useState } from 'react';
 import { Alert, Image, Keyboard, Linking, Pressable, ScrollView, View } from 'react-native';
@@ -8,20 +9,21 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Brackets } from '@/components/Brackets';
 import { Field } from '@/components/Field';
 import { GlassBtn } from '@/components/GlassBtn';
+import { GalleryButton, ScanModeSelector, Shutter, TorchButton } from '@/components/ScanControls';
 import { H } from '@/components/Headline';
 import { Icon } from '@/components/Icon';
 import { PrimaryButton } from '@/components/PrimaryButton';
 import { Blink, Scanline } from '@/components/anim';
 import { Txt } from '@/components/Txt';
 import { useAuth } from '@/lib/auth';
-import { capturePhoto } from '@/lib/camera';
-import { addFridgeItems, type DetectedItem } from '@/lib/fridge';
+import { capturePhoto, pickFromLibrary } from '@/lib/camera';
+import { addFridgeItems, clearFridge, useFridgeItems, type DetectedItem } from '@/lib/fridge';
 import { useKeyboardHeight } from '@/lib/keyboard';
 import { useNav } from '@/lib/nav';
 import { scanFridge } from '@/lib/scan';
 import { useTheme } from '@/theme/ThemeProvider';
 
-type Phase = 'idle' | 'scanning' | 'done';
+type Phase = 'idle' | 'review' | 'scanning' | 'done';
 
 export default function ScanScreen() {
   const { theme } = useTheme();
@@ -29,6 +31,8 @@ export default function ScanScreen() {
   const { session } = useAuth();
   const insets = useSafeAreaInsets();
   const [permission, requestPermission] = useCameraPermissions();
+  const isFocused = useIsFocused();
+  const { items: existing } = useFridgeItems();
 
   const cameraRef = useRef<CameraView>(null);
   const [ready, setReady] = useState(false);
@@ -40,6 +44,7 @@ export default function ScanScreen() {
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [refining, setRefining] = useState(false);
+  const [torch, setTorch] = useState(false);
   const kb = useKeyboardHeight();
   const sheetLift = kb > 0 ? -Math.max(0, kb - insets.bottom) : 0;
 
@@ -51,30 +56,39 @@ export default function ScanScreen() {
     setError(null);
   };
 
-  const shoot = async () => {
+  // Capture (camera) or pick (library) → freeze the photo and let the user add a
+  // description before the AI runs (the 'review' step).
+  const capture = async (source: 'camera' | 'library') => {
     if (phase === 'scanning') return;
-    if (phase === 'done') {
-      reset();
-      return;
+    Keyboard.dismiss();
+    setError(null);
+    try {
+      const shot =
+        source === 'camera'
+          ? cameraRef.current && ready
+            ? await capturePhoto(cameraRef.current)
+            : null
+          : await pickFromLibrary();
+      if (!shot) return; // camera not ready, or user cancelled the picker
+      setCapturedUri(shot.previewUri);
+      setCapturedBase64(shot.base64);
+      setPhase('review');
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Could not load that photo. Try again.');
     }
-    if (!cameraRef.current || !ready) return;
+  };
+
+  const analyze = async () => {
+    if (!capturedBase64 || phase === 'scanning') return;
     Keyboard.dismiss();
     setError(null);
     setPhase('scanning');
     try {
-      const { previewUri, base64 } = await capturePhoto(cameraRef.current);
-      // Freeze the captured shot — the photo is already taken, so the user
-      // doesn't need to keep holding the camera still while the AI runs.
-      setCapturedUri(previewUri);
-      setCapturedBase64(base64);
-      const items = await scanFridge(base64, note);
-      setDetected(items);
+      setDetected(await scanFridge(capturedBase64, note));
       setPhase('done');
     } catch (e) {
-      setCapturedUri(null);
-      setCapturedBase64(null);
       setError(e instanceof Error ? e.message : 'Scan failed. Try again.');
-      setPhase('idle');
+      setPhase('review');
     }
   };
 
@@ -96,14 +110,34 @@ export default function ScanScreen() {
 
   const save = async () => {
     if (!session?.user || detected.length === 0) return;
-    setSaving(true);
-    const saved = await addFridgeItems(session.user.id, detected, 'scan');
-    setSaving(false);
-    if (saved.length === 0) {
-      Alert.alert('Could not save', 'Please try again.');
-      return;
+    const userId = session.user.id;
+
+    const persist = async (replace: boolean) => {
+      setSaving(true);
+      if (replace) await clearFridge(userId);
+      const saved = await addFridgeItems(userId, detected, 'scan');
+      setSaving(false);
+      if (saved.length === 0) {
+        Alert.alert('Could not save', 'Please try again.');
+        return;
+      }
+      nav.go('recipes');
+    };
+
+    // If the fridge already has items, ask whether to replace them or add on top.
+    if (existing.length > 0) {
+      Alert.alert(
+        'Update your fridge',
+        `You already have ${existing.length} item${existing.length > 1 ? 's' : ''}. Replace them with this scan, or add these on top?`,
+        [
+          { text: 'Cancel', style: 'cancel' },
+          { text: 'Add to fridge', onPress: () => persist(false) },
+          { text: 'Replace all', style: 'destructive', onPress: () => persist(true) },
+        ]
+      );
+    } else {
+      persist(false);
     }
-    nav.go('recipes');
   };
 
   // ── permission gate ────────────────────────────────────────────────────────
@@ -174,6 +208,8 @@ export default function ScanScreen() {
       <CameraView
         ref={cameraRef}
         facing="back"
+        enableTorch={torch}
+        active={isFocused && phase === 'idle'}
         style={{ flex: 1 }}
         onCameraReady={() => setReady(true)}
       />
@@ -213,55 +249,50 @@ export default function ScanScreen() {
         />
       </View>
 
-      {/* scan frame */}
-      <View style={{ position: 'absolute', top: '17%', left: '11%', right: '11%', height: '40%', zIndex: 10 }}>
-        <Brackets color={theme.primary} glow animate={phase !== 'done'} len={36} w={4} r={14} />
-        {phase === 'scanning' && <Scanline color={theme.primary} duration={1400} thickness={3} />}
+      {/* brackets framing the fridge, over the live camera */}
+      {phase === 'idle' && (
+        <View style={{ position: 'absolute', top: '20%', left: '12%', right: '12%', height: '42%', zIndex: 10 }}>
+          <Brackets color={theme.primary} glow animate len={40} w={4} r={18} />
+        </View>
+      )}
 
-        {/* status pill */}
-        {phase !== 'done' && (
-          <View style={{ position: 'absolute', top: -40, left: 0, right: 0, alignItems: 'center' }}>
-            <View
-              style={{
-                flexDirection: 'row',
-                alignItems: 'center',
-                gap: 7,
-                paddingVertical: 8,
-                paddingHorizontal: 14,
-                borderRadius: 22,
-                backgroundColor: 'rgba(20,20,18,0.55)',
-              }}
-            >
-              <Blink style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: theme.accent }} />
-              <Txt w={700} size={13} color="#fff">
-                {phase === 'scanning' ? 'Analyzing…' : 'Point at your open fridge'}
-              </Txt>
-            </View>
+      {/* status pill while framing / analyzing */}
+      {(phase === 'idle' || phase === 'scanning') && (
+        <View style={{ position: 'absolute', top: '40%', left: 0, right: 0, alignItems: 'center', zIndex: 10 }}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 7, paddingVertical: 8, paddingHorizontal: 14, borderRadius: 22, backgroundColor: 'rgba(20,20,18,0.55)' }}>
+            <Blink style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: theme.accent }} />
+            <Txt w={700} size={13} color="#fff">
+              {phase === 'scanning' ? 'Analyzing…' : 'Point at your open fridge'}
+            </Txt>
           </View>
-        )}
-      </View>
+        </View>
+      )}
+      {phase === 'scanning' && (
+        <View style={{ position: 'absolute', top: '30%', left: '10%', right: '10%', height: '34%', zIndex: 10 }}>
+          <Scanline color={theme.primary} duration={1400} thickness={3} />
+        </View>
+      )}
 
-      {/* bottom sheet */}
-      <View
-        style={{
-          position: 'absolute',
-          left: 0,
-          right: 0,
-          bottom: 0,
-          zIndex: 20,
-          backgroundColor: theme.surface,
-          borderTopLeftRadius: 30,
-          borderTopRightRadius: 30,
-          paddingTop: 12,
-          paddingHorizontal: 22,
-          paddingBottom: Math.max(insets.bottom, 16) + 14,
-          boxShadow: '0px -14px 40px -10px rgba(0,0,0,0.3)',
-          transform: [{ translateY: sheetLift }],
-        }}
-      >
-        <View style={{ width: 40, height: 5, borderRadius: 3, backgroundColor: theme.track, alignSelf: 'center', marginBottom: 16 }} />
-
-        {phase === 'done' ? (
+      {/* review sheet — after capture */}
+      {phase === 'done' && (
+        <View
+          style={{
+            position: 'absolute',
+            left: 0,
+            right: 0,
+            bottom: 0,
+            zIndex: 20,
+            backgroundColor: theme.surface,
+            borderTopLeftRadius: 30,
+            borderTopRightRadius: 30,
+            paddingTop: 12,
+            paddingHorizontal: 22,
+            paddingBottom: Math.max(insets.bottom, 16) + 14,
+            boxShadow: '0px -14px 40px -10px rgba(0,0,0,0.3)',
+            transform: [{ translateY: sheetLift }],
+          }}
+        >
+          <View style={{ width: 40, height: 5, borderRadius: 3, backgroundColor: theme.track, alignSelf: 'center', marginBottom: 16 }} />
           <DoneSheet
             detected={detected}
             saving={saving}
@@ -273,60 +304,85 @@ export default function ScanScreen() {
             onRescan={reset}
             onRemove={(i) => setDetected((d) => d.filter((_, idx) => idx !== i))}
           />
-        ) : (
-          <View style={{ alignItems: 'center' }}>
-            <H size={25}>{phase === 'scanning' ? 'Analyzing…' : 'Scan your fridge'}</H>
-            <Txt w={500} size={14} color={theme.inkSec} style={{ marginTop: 5, marginBottom: 18, textAlign: 'center' }}>
-              {phase === 'scanning'
-                ? 'Reading your photo — this only takes a moment'
-                : 'Point at your open fridge, then tap'}
+        </View>
+      )}
+
+      {/* describe step — after capture, before analyzing (photo stays frozen behind) */}
+      {phase === 'review' && (
+        <View
+          style={{
+            position: 'absolute',
+            left: 0,
+            right: 0,
+            bottom: 0,
+            zIndex: 20,
+            backgroundColor: theme.surface,
+            borderTopLeftRadius: 30,
+            borderTopRightRadius: 30,
+            paddingTop: 22,
+            paddingHorizontal: 22,
+            paddingBottom: Math.max(insets.bottom, 16) + 14,
+            boxShadow: '0px -14px 40px -10px rgba(0,0,0,0.3)',
+            transform: [{ translateY: sheetLift }],
+          }}
+        >
+          <H size={23} style={{ textAlign: 'center' }}>
+            Add a description?
+          </H>
+          <Txt w={500} size={14} color={theme.inkSec} style={{ marginTop: 6, marginBottom: 16, textAlign: 'center', lineHeight: 20 }}>
+            Optional — name anything hidden in containers or hard to see for a better scan.
+          </Txt>
+          <Field
+            value={note}
+            onChangeText={setNote}
+            placeholder="e.g. leftover curry in the blue tub"
+            returnKeyType="done"
+            onSubmitEditing={analyze}
+            maxLength={300}
+            style={{ height: 50, fontSize: 14.5, backgroundColor: theme.bg, marginBottom: 14 }}
+          />
+          {error && (
+            <Txt w={600} size={13.5} color={theme.protein} style={{ marginBottom: 12, textAlign: 'center', lineHeight: 19 }}>
+              {error}
             </Txt>
-            {phase === 'idle' && (
-              <Field
-                value={note}
-                onChangeText={setNote}
-                placeholder="Describe items for a better scan (optional)"
-                returnKeyType="done"
-                onSubmitEditing={() => Keyboard.dismiss()}
-                maxLength={300}
-                style={{ width: '100%', height: 50, fontSize: 14.5, backgroundColor: theme.bg, marginBottom: 18 }}
-              />
-            )}
-            {error && (
-              <Txt w={600} size={13.5} color={theme.protein} style={{ marginBottom: 14, textAlign: 'center', lineHeight: 19 }}>
+          )}
+          <PrimaryButton onPress={analyze}>Scan fridge</PrimaryButton>
+          <Pressable onPress={reset} style={{ paddingVertical: 10, marginTop: 10 }}>
+            <Txt w={700} size={14.5} color={theme.inkSec} style={{ textAlign: 'center' }}>
+              Retake
+            </Txt>
+          </Pressable>
+        </View>
+      )}
+
+      {/* capture controls — over the live camera (photo #4.x) */}
+      {phase === 'idle' && (
+        <View
+          style={{
+            position: 'absolute',
+            left: 0,
+            right: 0,
+            bottom: Math.max(insets.bottom, 16) + 12,
+            zIndex: 20,
+            alignItems: 'center',
+            gap: 18,
+          }}
+        >
+          {error && (
+            <View style={{ maxWidth: '82%', paddingVertical: 9, paddingHorizontal: 16, borderRadius: 16, backgroundColor: 'rgba(28,28,26,0.72)' }}>
+              <Txt w={600} size={13} color="#fff" style={{ textAlign: 'center', lineHeight: 18 }}>
                 {error}
               </Txt>
-            )}
-            <Pressable
-              onPress={shoot}
-              disabled={phase === 'scanning' || !ready}
-              accessibilityRole="button"
-              accessibilityLabel={phase === 'scanning' ? 'Analyzing your fridge' : 'Take photo of your fridge'}
-              accessibilityState={{ disabled: phase === 'scanning' || !ready, busy: phase === 'scanning' }}
-              style={{
-                width: 78,
-                height: 78,
-                borderRadius: 39,
-                borderWidth: 4,
-                borderColor: theme.primarySoft,
-                alignItems: 'center',
-                justifyContent: 'center',
-                opacity: phase === 'scanning' || !ready ? 0.6 : 1,
-              }}
-            >
-              <View
-                style={{
-                  width: 60,
-                  height: 60,
-                  borderRadius: phase === 'scanning' ? 16 : 30,
-                  backgroundColor: theme.primary,
-                  boxShadow: `0px 6px 16px -6px ${theme.primary}`,
-                }}
-              />
-            </Pressable>
+            </View>
+          )}
+          <ScanModeSelector active="fridge" />
+          <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', width: '100%', paddingHorizontal: 44 }}>
+            <TorchButton on={torch} onPress={() => setTorch((t) => !t)} />
+            <Shutter onPress={() => capture('camera')} busy={false} disabled={!ready} />
+            <GalleryButton onPress={() => capture('library')} />
           </View>
-        )}
-      </View>
+        </View>
+      )}
     </View>
   );
 }

@@ -1,8 +1,9 @@
 /**
  * Font registry + helpers.
- * Body/UI font is Plus Jakarta Sans (5 weights); headlines use per-theme serifs.
- * RN doesn't synthesize weights for custom fonts, so we map a numeric weight to
- * the matching loaded family via `jakarta()`.
+ * Body/UI font is Plus Jakarta Sans (5 weights); headlines use Fredoka, a soft
+ * rounded display sans (friendly, matches the logo). RN doesn't synthesize
+ * weights for custom fonts, so we map a numeric weight to the matching loaded
+ * family via `jakarta()`.
  */
 import {
   PlusJakartaSans_400Regular,
@@ -11,10 +12,14 @@ import {
   PlusJakartaSans_700Bold,
   PlusJakartaSans_800ExtraBold,
 } from '@expo-google-fonts/plus-jakarta-sans';
-import { DMSerifDisplay_400Regular } from '@expo-google-fonts/dm-serif-display';
-import { Spectral_700Bold } from '@expo-google-fonts/spectral';
-import { Newsreader_600SemiBold } from '@expo-google-fonts/newsreader';
-import { SourceSerif4_600SemiBold } from '@expo-google-fonts/source-serif-4';
+import {
+  Fredoka_500Medium,
+  Fredoka_600SemiBold,
+  Fredoka_700Bold,
+} from '@expo-google-fonts/fredoka';
+
+/** Soft rounded display sans used for every headline (see <H>). */
+export const HEADLINE_FONT = 'Fredoka_600SemiBold';
 
 /** Passed to useFonts() in the root layout. */
 export const FONT_MAP = {
@@ -23,10 +28,9 @@ export const FONT_MAP = {
   PlusJakartaSans_600SemiBold,
   PlusJakartaSans_700Bold,
   PlusJakartaSans_800ExtraBold,
-  DMSerifDisplay_400Regular,
-  Spectral_700Bold,
-  Newsreader_600SemiBold,
-  SourceSerif4_600SemiBold,
+  Fredoka_500Medium,
+  Fredoka_600SemiBold,
+  Fredoka_700Bold,
 };
 
 export type Weight = 400 | 500 | 600 | 700 | 800;

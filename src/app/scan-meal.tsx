@@ -1,27 +1,34 @@
 /** Meal scan — photograph a plate, AI estimates nutrition, log it to the day. */
 import { CameraView, useCameraPermissions } from 'expo-camera';
 import { LinearGradient } from 'expo-linear-gradient';
-import { useLocalSearchParams } from 'expo-router';
+import { useIsFocused, useLocalSearchParams } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { useRef, useState } from 'react';
-import { Alert, Image, Keyboard, Linking, Pressable, ScrollView, View } from 'react-native';
+import { Animated, Dimensions, Image, Keyboard, Linking, PanResponder, Pressable, ScrollView, View, Alert } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Blink, Scanline } from '@/components/anim';
+import { Brackets } from '@/components/Brackets';
 import { Field } from '@/components/Field';
 import { GlassBtn } from '@/components/GlassBtn';
+import { GalleryButton, ScanModeSelector, Shutter, TorchButton } from '@/components/ScanControls';
 import { H } from '@/components/Headline';
 import { Icon } from '@/components/Icon';
 import { PrimaryButton } from '@/components/PrimaryButton';
 import { Txt } from '@/components/Txt';
 import { useAuth } from '@/lib/auth';
-import { capturePhoto } from '@/lib/camera';
+import { capturePhoto, pickFromLibrary } from '@/lib/camera';
 import { addFoodLog, localDateISO, MEALS, type MealType } from '@/lib/food';
 import { useKeyboardHeight } from '@/lib/keyboard';
 import { scanMeal, type MealItem } from '@/lib/meal';
 import { useNav } from '@/lib/nav';
 import { useTheme } from '@/theme/ThemeProvider';
 
-type Phase = 'idle' | 'scanning' | 'done';
+type Phase = 'idle' | 'review' | 'scanning' | 'done';
+
+// How far the review sheet can be dragged down to peek at the captured photo.
+const SCREEN_H = Dimensions.get('window').height;
+const SHEET_PEEK = Math.min(380, SCREEN_H * 0.45);
+const clampPeek = (y: number) => Math.min(SHEET_PEEK, Math.max(0, y));
 
 /** Sensible default meal for the current time of day. */
 function defaultMeal(): MealType {
@@ -38,6 +45,7 @@ export default function ScanMealScreen() {
   const { session } = useAuth();
   const insets = useSafeAreaInsets();
   const [permission, requestPermission] = useCameraPermissions();
+  const isFocused = useIsFocused();
 
   // Launched from add-food with a target meal/date; otherwise fall back to today
   // and a time-of-day default.
@@ -55,36 +63,70 @@ export default function ScanMealScreen() {
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [refining, setRefining] = useState(false);
+  const [torch, setTorch] = useState(false);
   const kb = useKeyboardHeight();
   const sheetLift = kb > 0 ? -Math.max(0, kb - insets.bottom) : 0;
 
-  // keep the description on rescan (so a hint can be tweaked, not retyped)
+  // Drag-to-peek: pulling the sheet's handle down slides it off-screen to reveal
+  // the photo behind it; releasing snaps it back open or to the peeked position.
+  const [dragY] = useState(() => new Animated.Value(0));
+  // `peeked` is the sheet's settled state; the drag starts from its position.
+  const [peeked, setPeeked] = useState(false);
+  const settle = (next: boolean) => {
+    setPeeked(next);
+    Animated.spring(dragY, { toValue: next ? SHEET_PEEK : 0, useNativeDriver: true, bounciness: 3, speed: 14 }).start();
+  };
+  // Recreated each render so the closures capture the current `peeked` base.
+  const base = peeked ? SHEET_PEEK : 0;
+  const pan = PanResponder.create({
+    onMoveShouldSetPanResponder: (_, g) => Math.abs(g.dy) > 6 && Math.abs(g.dy) > Math.abs(g.dx),
+    onPanResponderMove: (_, g) => dragY.setValue(clampPeek(base + g.dy)),
+    onPanResponderRelease: (_, g) => settle(clampPeek(base + g.dy) > SHEET_PEEK * 0.4 || g.vy > 0.6),
+  });
+
+  // back to the live camera (keeps the description so a hint can be tweaked)
   const reset = () => {
     setPhase('idle');
     setCapturedUri(null);
     setCapturedBase64(null);
     setItems([]);
     setError(null);
+    settle(false);
   };
 
-  const shoot = async () => {
-    if (phase === 'scanning' || !cameraRef.current || !ready) return;
+  // Capture (camera) or pick (library) → freeze the photo and let the user add a
+  // description before the AI runs (the 'review' step).
+  const capture = async (source: 'camera' | 'library') => {
+    if (phase === 'scanning') return;
+    Keyboard.dismiss();
+    setError(null);
+    try {
+      const shot =
+        source === 'camera'
+          ? cameraRef.current && ready
+            ? await capturePhoto(cameraRef.current)
+            : null
+          : await pickFromLibrary();
+      if (!shot) return; // camera not ready, or user cancelled the picker
+      setCapturedUri(shot.previewUri);
+      setCapturedBase64(shot.base64);
+      setPhase('review');
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Could not load that photo. Try again.');
+    }
+  };
+
+  const analyze = async () => {
+    if (!capturedBase64 || phase === 'scanning') return;
     Keyboard.dismiss();
     setError(null);
     setPhase('scanning');
     try {
-      const { previewUri, base64 } = await capturePhoto(cameraRef.current);
-      // Freeze the captured shot — no need to keep holding the camera still.
-      setCapturedUri(previewUri);
-      setCapturedBase64(base64);
-      const detected = await scanMeal(base64, note);
-      setItems(detected);
+      setItems(await scanMeal(capturedBase64, note));
       setPhase('done');
     } catch (e) {
-      setCapturedUri(null);
-      setCapturedBase64(null);
       setError(e instanceof Error ? e.message : 'Could not analyze your meal. Try again.');
-      setPhase('idle');
+      setPhase('review');
     }
   };
 
@@ -117,6 +159,7 @@ export default function ScanMealScreen() {
           mealType: meal,
           name: it.name,
           macros: { calories: it.calories, protein: it.protein, carbs: it.carbs, fat: it.fat },
+          micros: it.micros,
           grams: it.grams || 1,
           source: 'scan',
         })
@@ -173,7 +216,7 @@ export default function ScanMealScreen() {
   return (
     <View style={{ flex: 1, backgroundColor: '#141513', overflow: 'hidden' }}>
       <StatusBar style="light" />
-      <CameraView ref={cameraRef} facing="back" style={{ flex: 1 }} onCameraReady={() => setReady(true)} />
+      <CameraView ref={cameraRef} facing="back" enableTorch={torch} active={isFocused && phase === 'idle'} style={{ flex: 1 }} onCameraReady={() => setReady(true)} />
       {/* frozen captured frame shown over the live feed once a shot is taken */}
       {capturedUri && (
         <Image source={{ uri: capturedUri }} resizeMode="cover" style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0 }} />
@@ -199,8 +242,15 @@ export default function ScanMealScreen() {
         />
       </View>
 
+      {/* brackets framing the plate, over the live camera */}
+      {phase === 'idle' && (
+        <View style={{ position: 'absolute', top: '20%', left: '12%', right: '12%', height: '42%', zIndex: 10 }}>
+          <Brackets color={theme.primary} glow animate len={40} w={4} r={18} />
+        </View>
+      )}
+
       {/* status pill while framing / analyzing */}
-      {phase !== 'done' && (
+      {(phase === 'idle' || phase === 'scanning') && (
         <View style={{ position: 'absolute', top: '40%', left: 0, right: 0, alignItems: 'center', zIndex: 10 }}>
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 7, paddingVertical: 8, paddingHorizontal: 14, borderRadius: 22, backgroundColor: 'rgba(20,20,18,0.55)' }}>
             <Blink style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: theme.accent }} />
@@ -216,27 +266,35 @@ export default function ScanMealScreen() {
         </View>
       )}
 
-      {/* bottom sheet */}
-      <View
-        style={{
-          position: 'absolute',
-          left: 0,
-          right: 0,
-          bottom: 0,
-          zIndex: 20,
-          backgroundColor: theme.surface,
-          borderTopLeftRadius: 30,
-          borderTopRightRadius: 30,
-          paddingTop: 12,
-          paddingHorizontal: 22,
-          paddingBottom: Math.max(insets.bottom, 16) + 14,
-          boxShadow: '0px -14px 40px -10px rgba(0,0,0,0.3)',
-          transform: [{ translateY: sheetLift }],
-        }}
-      >
-        <View style={{ width: 40, height: 5, borderRadius: 3, backgroundColor: theme.track, alignSelf: 'center', marginBottom: 16 }} />
+      {/* review sheet — slides up after capture */}
+      {phase === 'done' && (
+        <Animated.View
+          style={{
+            position: 'absolute',
+            left: 0,
+            right: 0,
+            bottom: 0,
+            zIndex: 20,
+            backgroundColor: theme.surface,
+            borderTopLeftRadius: 30,
+            borderTopRightRadius: 30,
+            paddingTop: 12,
+            paddingHorizontal: 22,
+            paddingBottom: Math.max(insets.bottom, 16) + 14,
+            boxShadow: '0px -14px 40px -10px rgba(0,0,0,0.3)',
+            transform: [{ translateY: sheetLift }, { translateY: dragY }],
+          }}
+        >
+          {/* drag handle — pull down to peek at the photo */}
+          <View
+            {...pan.panHandlers}
+            accessibilityRole="adjustable"
+            accessibilityLabel="Drag down to see your photo"
+            style={{ alignItems: 'center', marginTop: -12, marginHorizontal: -22, paddingTop: 12, paddingBottom: 16 }}
+          >
+            <View style={{ width: 40, height: 5, borderRadius: 3, backgroundColor: theme.track }} />
+          </View>
 
-        {phase === 'done' ? (
           <ReviewSheet
             items={items}
             meal={meal}
@@ -250,52 +308,85 @@ export default function ScanMealScreen() {
             onRescan={reset}
             onRemove={(i) => setItems((d) => d.filter((_, idx) => idx !== i))}
           />
-        ) : (
-          <View style={{ alignItems: 'center' }}>
-            <H size={25}>{phase === 'scanning' ? 'Analyzing…' : 'Scan your meal'}</H>
-            <Txt w={500} size={14} color={theme.inkSec} style={{ marginTop: 5, marginBottom: 18, textAlign: 'center' }}>
-              {phase === 'scanning'
-                ? 'Estimating calories and macros — one moment'
-                : 'Point at your plate, then tap'}
+        </Animated.View>
+      )}
+
+      {/* describe step — after capture, before analyzing (photo stays frozen behind) */}
+      {phase === 'review' && (
+        <Animated.View
+          style={{
+            position: 'absolute',
+            left: 0,
+            right: 0,
+            bottom: 0,
+            zIndex: 20,
+            backgroundColor: theme.surface,
+            borderTopLeftRadius: 30,
+            borderTopRightRadius: 30,
+            paddingTop: 22,
+            paddingHorizontal: 22,
+            paddingBottom: Math.max(insets.bottom, 16) + 14,
+            boxShadow: '0px -14px 40px -10px rgba(0,0,0,0.3)',
+            transform: [{ translateY: sheetLift }],
+          }}
+        >
+          <H size={23} style={{ textAlign: 'center' }}>
+            Add a description?
+          </H>
+          <Txt w={500} size={14} color={theme.inkSec} style={{ marginTop: 6, marginBottom: 16, textAlign: 'center', lineHeight: 20 }}>
+            Optional — mention portion size or anything hard to see for a better estimate.
+          </Txt>
+          <Field
+            value={note}
+            onChangeText={setNote}
+            placeholder="e.g. grilled chicken, about 200g"
+            returnKeyType="done"
+            onSubmitEditing={analyze}
+            maxLength={300}
+            style={{ height: 50, fontSize: 14.5, backgroundColor: theme.bg, marginBottom: 14 }}
+          />
+          {error && (
+            <Txt w={600} size={13.5} color={theme.protein} style={{ marginBottom: 12, textAlign: 'center', lineHeight: 19 }}>
+              {error}
             </Txt>
-            {phase === 'idle' && (
-              <Field
-                value={note}
-                onChangeText={setNote}
-                placeholder="Describe it for a better estimate (optional)"
-                returnKeyType="done"
-                onSubmitEditing={() => Keyboard.dismiss()}
-                maxLength={300}
-                style={{ width: '100%', height: 50, fontSize: 14.5, backgroundColor: theme.bg, marginBottom: 18 }}
-              />
-            )}
-            {error && (
-              <Txt w={600} size={13.5} color={theme.protein} style={{ marginBottom: 14, textAlign: 'center', lineHeight: 19 }}>
+          )}
+          <PrimaryButton onPress={analyze}>Analyze meal</PrimaryButton>
+          <Pressable onPress={reset} style={{ paddingVertical: 10, marginTop: 10 }}>
+            <Txt w={700} size={14.5} color={theme.inkSec} style={{ textAlign: 'center' }}>
+              Retake
+            </Txt>
+          </Pressable>
+        </Animated.View>
+      )}
+
+      {/* capture controls — over the live camera (photo #4.x) */}
+      {phase === 'idle' && (
+        <View
+          style={{
+            position: 'absolute',
+            left: 0,
+            right: 0,
+            bottom: Math.max(insets.bottom, 16) + 12,
+            zIndex: 20,
+            alignItems: 'center',
+            gap: 18,
+          }}
+        >
+          {error && (
+            <View style={{ maxWidth: '82%', paddingVertical: 9, paddingHorizontal: 16, borderRadius: 16, backgroundColor: 'rgba(28,28,26,0.72)' }}>
+              <Txt w={600} size={13} color="#fff" style={{ textAlign: 'center', lineHeight: 18 }}>
                 {error}
               </Txt>
-            )}
-            <Pressable
-              onPress={shoot}
-              disabled={phase === 'scanning' || !ready}
-              accessibilityRole="button"
-              accessibilityLabel={phase === 'scanning' ? 'Analyzing your meal' : 'Take photo of your meal'}
-              accessibilityState={{ disabled: phase === 'scanning' || !ready, busy: phase === 'scanning' }}
-              style={{
-                width: 78,
-                height: 78,
-                borderRadius: 39,
-                borderWidth: 4,
-                borderColor: theme.primarySoft,
-                alignItems: 'center',
-                justifyContent: 'center',
-                opacity: phase === 'scanning' || !ready ? 0.6 : 1,
-              }}
-            >
-              <View style={{ width: 60, height: 60, borderRadius: phase === 'scanning' ? 16 : 30, backgroundColor: theme.primary, boxShadow: `0px 6px 16px -6px ${theme.primary}` }} />
-            </Pressable>
+            </View>
+          )}
+          <ScanModeSelector active="meal" />
+          <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', width: '100%', paddingHorizontal: 44 }}>
+            <TorchButton on={torch} onPress={() => setTorch((t) => !t)} />
+            <Shutter onPress={() => capture('camera')} busy={false} disabled={!ready} />
+            <GalleryButton onPress={() => capture('library')} />
           </View>
-        )}
-      </View>
+        </View>
+      )}
     </View>
   );
 }

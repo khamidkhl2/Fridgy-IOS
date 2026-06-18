@@ -1,37 +1,50 @@
 /**
- * Bottom tab bar with a raised center Scan FAB (the hero action).
- * Used as the custom `tabBar` for the (tabs) navigator: Kitchen · Recipes · [Scan] · Profile.
+ * Bottom tab bar: Kitchen · Recipes · Profile, with a raised Scan action in the
+ * right corner that opens a 2×2 chooser (Scan meal / Scan fridge / Food database
+ * / Saved recipes) — see photo #3.
  */
 import { useRouter, type Href } from 'expo-router';
 import { useEffect, useState } from 'react';
-import { Animated, Easing, Modal, Pressable, StyleSheet, View } from 'react-native';
+import { Animated, Easing, Modal, Pressable, StyleSheet, useWindowDimensions, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { haptics } from '@/lib/haptics';
 import { useTheme } from '@/theme/ThemeProvider';
-import { H } from './Headline';
 import { Icon, type IconName } from './Icon';
 import { Txt } from './Txt';
 
-/**
- * Minimal structural shape of the props the `tabBar` render prop hands us — only
- * what we read. Keeps us decoupled from expo-router's internal vendored types.
- */
 type TabBarProps = {
   state: { index: number; routeNames: string[] };
   navigation: { navigate: (name: string) => void };
 };
 
+const FAB = 58;
+const BAR_PAD_H = 14;
+
+type ScanDest = 'meal' | 'fridge' | 'database' | 'recipes';
+
 export function TabBar({ state, navigation }: TabBarProps) {
   const { theme } = useTheme();
   const router = useRouter();
   const insets = useSafeAreaInsets();
+  const { width } = useWindowDimensions();
   const current = state.routeNames[state.index];
+  const [open, setOpen] = useState(false);
 
-  // The hero scan button opens a chooser: both scanners are camera actions, so
-  // grouping them here gives the meal scanner equal footing with fridge scan.
-  const [chooserOpen, setChooserOpen] = useState(false);
-  const pick = (dest: 'fridge' | 'meal') => {
-    setChooserOpen(false);
-    router.push(dest === 'fridge' ? '/scan' : ('/scan-meal' as Href));
+  // Right-corner FAB sits over the last of five equal slots (4 tabs + FAB), so
+  // the chooser's X (rendered in the modal) lines up with it.
+  const slot = (width - BAR_PAD_H * 2) / 5;
+  const fabRight = BAR_PAD_H + slot / 2 - FAB / 2;
+
+  const pick = (dest: ScanDest) => {
+    setOpen(false);
+    haptics.light();
+    const href: Record<ScanDest, string> = {
+      meal: '/scan-meal',
+      fridge: '/scan',
+      database: '/add-food',
+      recipes: '/saved-recipes',
+    };
+    router.push(href[dest] as Href);
   };
 
   const item = (name: string, icon: IconName, label: string) => {
@@ -39,7 +52,10 @@ export function TabBar({ state, navigation }: TabBarProps) {
     return (
       <Pressable
         key={name}
-        onPress={() => navigation.navigate(name)}
+        onPress={() => {
+          haptics.selection();
+          navigation.navigate(name);
+        }}
         accessibilityRole="button"
         accessibilityLabel={label}
         accessibilityState={{ selected: on }}
@@ -55,207 +71,178 @@ export function TabBar({ state, navigation }: TabBarProps) {
 
   return (
     <>
-    <View
-      style={{
-        paddingTop: 12,
-        paddingBottom: Math.max(insets.bottom, 10),
-        borderTopWidth: 1,
-        borderTopColor: theme.border,
-        backgroundColor: theme.surface,
-      }}
-    >
-      <View style={{ flexDirection: 'row', alignItems: 'flex-start', paddingHorizontal: 14 }}>
-        {item('home', 'home', 'Kitchen')}
-        {item('recipes', 'book', 'Recipes')}
-        {/* center FAB slot */}
-        <View style={{ flex: 1, alignItems: 'center' }}>
-          <Pressable
-            onPress={() => setChooserOpen(true)}
-            accessibilityRole="button"
-            accessibilityLabel="Open scanner"
-            style={({ pressed }) => ({
-              width: 62,
-              height: 62,
-              borderRadius: 31,
-              marginTop: -26,
-              backgroundColor: theme.primary,
-              alignItems: 'center',
-              justifyContent: 'center',
-              borderWidth: 6,
-              borderColor: theme.surface,
-              boxShadow: `0px 12px 26px -8px ${theme.primary}`,
-              transform: [{ scale: pressed ? 0.94 : 1 }],
-            })}
-          >
-            <Icon name="scan" size={28} color={theme.onPrimary} stroke={2} />
-          </Pressable>
+      <View
+        style={{
+          paddingTop: 12,
+          paddingBottom: Math.max(insets.bottom, 10),
+          paddingHorizontal: BAR_PAD_H,
+          borderTopWidth: 1,
+          borderTopColor: theme.border,
+          backgroundColor: theme.surface,
+        }}
+      >
+        <View style={{ flexDirection: 'row', alignItems: 'flex-start' }}>
+          {item('home', 'home', 'Kitchen')}
+          {item('recipes', 'book', 'Recipes')}
+          {item('progress', 'chart', 'Progress')}
+          {item('profile', 'user', 'Profile')}
+          {/* spacer slot under the FAB */}
+          <View style={{ flex: 1 }} />
         </View>
-        {item('profile', 'user', 'Profile')}
       </View>
-    </View>
 
-    <ScanChooser visible={chooserOpen} onClose={() => setChooserOpen(false)} onPick={pick} />
+      {/* right-corner scan FAB */}
+      <Pressable
+        onPress={() => {
+          haptics.light();
+          setOpen(true);
+        }}
+        accessibilityRole="button"
+        accessibilityLabel="Open scan menu"
+        style={({ pressed }) => ({
+          position: 'absolute',
+          right: fabRight,
+          bottom: Math.max(insets.bottom, 10) + 8,
+          width: FAB,
+          height: FAB,
+          borderRadius: FAB / 2,
+          backgroundColor: theme.primary,
+          alignItems: 'center',
+          justifyContent: 'center',
+          boxShadow: `0px 10px 24px -8px ${theme.primary}`,
+          transform: [{ scale: pressed ? 0.94 : 1 }],
+        })}
+      >
+        <Icon name="plus" size={28} color={theme.onPrimary} stroke={2.4} />
+      </Pressable>
+
+      <ScanMenu
+        visible={open}
+        onClose={() => setOpen(false)}
+        onPick={pick}
+        fabRight={fabRight}
+        fabBottom={Math.max(insets.bottom, 10) + 8}
+      />
     </>
   );
 }
 
-/** Bottom sheet that routes the hero scan button to either scanner. */
-function ScanChooser({
+/** The 2×2 chooser that pops above the corner FAB. */
+function ScanMenu({
   visible,
   onClose,
   onPick,
+  fabRight,
+  fabBottom,
 }: {
   visible: boolean;
   onClose: () => void;
-  onPick: (dest: 'fridge' | 'meal') => void;
+  onPick: (dest: ScanDest) => void;
+  fabRight: number;
+  fabBottom: number;
 }) {
   const { theme } = useTheme();
-  const insets = useSafeAreaInsets();
-
-  // 0 = closed, 1 = open. Drives the backdrop opacity (fade) and the sheet
-  // translateY (slide) independently, so the dim darkens in place rather than
-  // sliding up with the sheet.
   const [anim] = useState(() => new Animated.Value(0));
-  const [sheetH, setSheetH] = useState(0);
 
-  // Drive the backdrop fade + sheet slide off one value. The effect only touches
-  // the Animated value (not React state), so it stays render-clean.
   useEffect(() => {
     anim.setValue(0);
     if (visible) {
       Animated.timing(anim, {
         toValue: 1,
-        duration: 260,
-        easing: Easing.out(Easing.cubic),
+        duration: 240,
+        easing: Easing.out(Easing.back(1.3)),
         useNativeDriver: true,
       }).start();
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [visible]);
 
-  // Animate the sheet down + backdrop out, then ask the parent to unmount.
   const close = () => {
     Animated.timing(anim, {
       toValue: 0,
-      duration: 200,
+      duration: 160,
       easing: Easing.in(Easing.cubic),
       useNativeDriver: true,
-    }).start(({ finished }) => {
-      if (finished) onClose();
-    });
+    }).start(({ finished }) => finished && onClose());
   };
 
-  const translateY = anim.interpolate({ inputRange: [0, 1], outputRange: [sheetH || 600, 0] });
-  const dim = anim.interpolate({ inputRange: [0, 1], outputRange: [0, 0.45] });
+  const dim = anim.interpolate({ inputRange: [0, 1], outputRange: [0, 0.4] });
+  const gridScale = anim.interpolate({ inputRange: [0, 1], outputRange: [0.85, 1] });
+  const gridTranslate = anim.interpolate({ inputRange: [0, 1], outputRange: [16, 0] });
+
+  const options: { dest: ScanDest; emoji: string; label: string }[] = [
+    { dest: 'meal', emoji: '🍽️', label: 'Scan meal' },
+    { dest: 'fridge', emoji: '🧊', label: 'Scan fridge' },
+    { dest: 'database', emoji: '🔍', label: 'Food database' },
+    { dest: 'recipes', emoji: '📖', label: 'Saved recipes' },
+  ];
 
   return (
     <Modal visible={visible} transparent animationType="none" statusBarTranslucent onRequestClose={close}>
       <View style={{ flex: 1 }}>
-        {/* dim layer — fades in place to darken the screen */}
         <Animated.View style={[StyleSheet.absoluteFill, { backgroundColor: '#000', opacity: dim }]} />
-        {/* tap-to-close catcher */}
-        <Pressable style={StyleSheet.absoluteFill} onPress={close} accessibilityLabel="Close scanner" />
+        <Pressable style={StyleSheet.absoluteFill} onPress={close} accessibilityLabel="Close scan menu" />
 
-        {/* sheet — slides up from the bottom */}
+        {/* grid, anchored just above the FAB on the right */}
         <Animated.View
-          onLayout={(e) => setSheetH(e.nativeEvent.layout.height)}
-          style={{ position: 'absolute', left: 0, right: 0, bottom: 0, transform: [{ translateY }] }}
+          style={{
+            position: 'absolute',
+            right: 18,
+            bottom: fabBottom + FAB + 16,
+            width: 300,
+            flexDirection: 'row',
+            flexWrap: 'wrap',
+            gap: 12,
+            opacity: anim,
+            transform: [{ scale: gridScale }, { translateY: gridTranslate }],
+          }}
         >
-          <View
-            style={{
-              backgroundColor: theme.surface,
-              borderTopLeftRadius: 28,
-              borderTopRightRadius: 28,
-              paddingTop: 12,
-              paddingHorizontal: 22,
-              paddingBottom: Math.max(insets.bottom, 16) + 10,
-            }}
-          >
-            <View style={{ width: 40, height: 5, borderRadius: 3, backgroundColor: theme.track, alignSelf: 'center', marginBottom: 16 }} />
-            <H size={22} style={{ marginBottom: 4 }}>
-              Scan
-            </H>
-            <Txt w={500} size={13.5} color={theme.inkSec} style={{ marginBottom: 18 }}>
-              Point your camera at your fridge or a meal.
-            </Txt>
-            <View style={{ gap: 12 }}>
-              <ScanOption
-                icon="scan"
-                title="Scan your fridge"
-                subtitle="Get recipe ideas from what you have"
-                onPress={() => onPick('fridge')}
-              />
-              <ScanOption
-                icon="camera"
-                title="Scan a meal"
-                subtitle="Log calories & macros from a photo"
-                onPress={() => onPick('meal')}
-              />
-            </View>
-            <Pressable onPress={close} style={{ paddingVertical: 14, marginTop: 8 }}>
-              <Txt w={700} size={14.5} color={theme.inkSec} style={{ textAlign: 'center' }}>
-                Cancel
+          {options.map((o) => (
+            <Pressable
+              key={o.dest}
+              onPress={() => onPick(o.dest)}
+              accessibilityRole="button"
+              accessibilityLabel={o.label}
+              style={({ pressed }) => ({
+                width: 144,
+                paddingVertical: 22,
+                borderRadius: 22,
+                alignItems: 'center',
+                gap: 10,
+                backgroundColor: theme.surface,
+                boxShadow: '0px 12px 30px -12px rgba(0,0,0,0.4)',
+                transform: [{ scale: pressed ? 0.96 : 1 }],
+              })}
+            >
+              <Txt size={30}>{o.emoji}</Txt>
+              <Txt w={800} size={15} color={theme.ink}>
+                {o.label}
               </Txt>
             </Pressable>
-          </View>
+          ))}
         </Animated.View>
+
+        {/* FAB turned into a close button, lined up over the real FAB */}
+        <Pressable
+          onPress={close}
+          accessibilityRole="button"
+          accessibilityLabel="Close scan menu"
+          style={{
+            position: 'absolute',
+            right: fabRight,
+            bottom: fabBottom,
+            width: FAB,
+            height: FAB,
+            borderRadius: FAB / 2,
+            backgroundColor: theme.primaryDeep,
+            alignItems: 'center',
+            justifyContent: 'center',
+            boxShadow: `0px 10px 24px -8px ${theme.primary}`,
+          }}
+        >
+          <Icon name="close" size={24} color={theme.onPrimary} stroke={2.4} />
+        </Pressable>
       </View>
     </Modal>
-  );
-}
-
-/** One row in the scan chooser sheet. */
-function ScanOption({
-  icon,
-  title,
-  subtitle,
-  onPress,
-}: {
-  icon: IconName;
-  title: string;
-  subtitle: string;
-  onPress: () => void;
-}) {
-  const { theme } = useTheme();
-  return (
-    <Pressable
-      onPress={onPress}
-      accessibilityRole="button"
-      accessibilityLabel={title}
-      style={{
-        flexDirection: 'row',
-        alignItems: 'center',
-        gap: 14,
-        padding: 16,
-        borderRadius: 18,
-        backgroundColor: theme.bg,
-        borderWidth: 1.5,
-        borderColor: theme.border,
-      }}
-    >
-      <View
-        style={{
-          width: 48,
-          height: 48,
-          borderRadius: 14,
-          backgroundColor: theme.primarySoft,
-          alignItems: 'center',
-          justifyContent: 'center',
-        }}
-      >
-        <Icon name={icon} size={24} color={theme.primary} stroke={1.8} />
-      </View>
-      <View style={{ flex: 1 }}>
-        <Txt w={800} size={16} color={theme.ink}>
-          {title}
-        </Txt>
-        <Txt w={500} size={13} color={theme.inkSec} style={{ marginTop: 2 }}>
-          {subtitle}
-        </Txt>
-      </View>
-      <View style={{ transform: [{ scaleX: -1 }] }}>
-        <Icon name="chevronLeft" size={18} color={theme.inkSec} stroke={2} />
-      </View>
-    </Pressable>
   );
 }

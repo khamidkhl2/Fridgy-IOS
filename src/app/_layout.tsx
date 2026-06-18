@@ -8,6 +8,7 @@ import { useEffect } from 'react';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { ErrorBoundary } from '@/components/ErrorBoundary';
 import { AuthProvider } from '@/lib/auth';
+import { NotificationSync } from '@/lib/NotificationSync';
 import { OnboardingProvider } from '@/lib/onboarding';
 import { PreferenceSync } from '@/lib/preferences';
 import { ProfileProvider } from '@/lib/profile';
@@ -42,11 +43,15 @@ function RootNavigator() {
         />
         <Stack.Screen name="add-food" options={{ presentation: 'modal' }} />
         <Stack.Screen name="settings" />
+        <Stack.Screen name="notifications" />
         <Stack.Screen name="fridge" />
         <Stack.Screen name="saved-recipes" />
         <Stack.Screen name="recipe" />
-        <Stack.Screen name="edit-profile" />
+        <Stack.Screen name="personal-details" />
+        <Stack.Screen name="goals-body" />
+        <Stack.Screen name="edit-field" />
         <Stack.Screen name="units" />
+        <Stack.Screen name="streak" />
       </Stack>
     </>
   );
@@ -69,6 +74,7 @@ export default function RootLayout() {
             <AuthProvider>
               <ProfileProvider>
                 <PreferenceSync />
+                <NotificationSync />
                 <OnboardingProvider>
                   <RootNavigator />
                 </OnboardingProvider>

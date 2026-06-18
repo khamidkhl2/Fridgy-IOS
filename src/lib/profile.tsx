@@ -135,12 +135,20 @@ export function ProfileProvider({ children }: { children: React.ReactNode }) {
       const existing = await fetchProfile(userId);
       if (existing?.onboarded) return;
       const data = JSON.parse(cached) as OnboardingData;
+      // Onboarding no longer asks for a name — fall back to the provider's.
+      if (!data.name) {
+        const meta = (session?.user?.user_metadata ?? {}) as Record<string, unknown>;
+        data.name =
+          (typeof meta.full_name === 'string' && meta.full_name) ||
+          (typeof meta.name === 'string' && meta.name) ||
+          '';
+      }
       await saveOnboardingToProfile(userId, data);
       refresh();
     })().catch(() => {
       /* best-effort; the local copy still drives the UI */
     });
-  }, [userId, refresh]);
+  }, [userId, refresh, session]);
 
   const value = useMemo<ProfileCtx>(
     () => ({ row, local, loading, loadFailed, refresh }),

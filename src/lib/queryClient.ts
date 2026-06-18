@@ -28,6 +28,7 @@ export const qk = {
   fridge: (userId?: string | null) => ['fridge', userId] as const,
   savedRecipes: (userId?: string | null) => ['savedRecipes', userId] as const,
   water: (userId?: string | null, day?: string) => ['water', userId, day] as const,
+  weights: (userId?: string | null) => ['weights', userId] as const,
 };
 
 /** Invalidate every variant of a key family (any user/day). */
@@ -36,6 +37,7 @@ export const invalidate = {
   fridge: () => queryClient.invalidateQueries({ queryKey: ['fridge'] }),
   savedRecipes: () => queryClient.invalidateQueries({ queryKey: ['savedRecipes'] }),
   water: () => queryClient.invalidateQueries({ queryKey: ['water'] }),
+  weights: () => queryClient.invalidateQueries({ queryKey: ['weights'] }),
 };
 
 // React Native has no window 'focus' event, so feed AppState into TanStack's

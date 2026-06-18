@@ -12,9 +12,9 @@ export type Dest =
   | 'recipes'
   | 'profile'
   | 'settings'
+  | 'notifications'
   | 'fridge'
   | 'savedRecipes'
-  | 'editProfile'
   | 'units';
 
 export function useNav() {
@@ -43,14 +43,15 @@ export function useNav() {
       case 'settings':
         router.push('/settings');
         break;
+      case 'notifications':
+        // cast: typed-routes cache may lag a freshly-added route file
+        router.push('/notifications' as Href);
+        break;
       case 'fridge':
         router.push('/fridge');
         break;
       case 'savedRecipes':
         router.push('/saved-recipes');
-        break;
-      case 'editProfile':
-        router.push('/edit-profile');
         break;
       case 'units':
         router.push('/units');

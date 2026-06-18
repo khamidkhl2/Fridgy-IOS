@@ -19,16 +19,36 @@ const CORS = {
 const BASE = 'https://api.nal.usda.gov/fdc/v1';
 
 type Macros = { calories: number; protein: number; carbs: number; fat: number };
+// Sparse per-100g micro map; keys match the app's MicroKey (src/lib/micros.ts).
+type Micros = Record<string, number>;
 type FoodHit = {
   fdcId: number;
   name: string;
   brand?: string;
   per100g: Macros;
+  /** Per-100g micronutrients (sparse), keyed by the app's MicroKey. */
+  micros100g?: Micros;
   servingGrams?: number;
 };
 
 // USDA nutrientNumber → our macro field.
 const NUTRIENT = { calories: '208', protein: '203', carbs: '205', fat: '204' } as const;
+// USDA nutrientNumber → our MicroKey. Units: fiber g; sodium/potassium/calcium/
+// magnesium/iron/zinc/vitaminC mg; vitaminD/vitaminB12 mcg. (Mirror of
+// src/lib/micros.ts — Deno functions can't import from the app.)
+const MICRO: Record<string, string> = {
+  fiber: '291',
+  sodium: '307',
+  potassium: '306',
+  calcium: '301',
+  iron: '303',
+  magnesium: '304',
+  zinc: '309',
+  vitaminC: '401',
+  vitaminD: '328', // Vitamin D (D2+D3), µg
+  vitaminB12: '418', // µg
+};
+const VITD_IU = '324'; // fallback: Vitamin D in IU (÷40 → µg)
 
 type RawNutrient = { nutrientNumber?: string; value?: number };
 type RawFood = {
@@ -51,17 +71,34 @@ function json(body: unknown, status = 200): Response {
   });
 }
 
-function macrosOf(food: RawFood): Macros {
+function nutrientMap(food: RawFood): Record<string, number> {
   const by: Record<string, number> = {};
   for (const n of food.foodNutrients ?? []) {
     if (n.nutrientNumber && typeof n.value === 'number') by[n.nutrientNumber] = n.value;
   }
+  return by;
+}
+
+function macrosOf(by: Record<string, number>): Macros {
   return {
     calories: Math.round(by[NUTRIENT.calories] ?? 0),
     protein: by[NUTRIENT.protein] ?? 0,
     carbs: by[NUTRIENT.carbs] ?? 0,
     fat: by[NUTRIENT.fat] ?? 0,
   };
+}
+
+function microsOf(by: Record<string, number>): Micros {
+  const out: Micros = {};
+  for (const [key, num] of Object.entries(MICRO)) {
+    const v = by[num];
+    if (typeof v === 'number' && v > 0) out[key] = v;
+  }
+  // Vitamin D is sometimes only reported in IU — convert to µg if µg is absent.
+  if (out.vitaminD === undefined && typeof by[VITD_IU] === 'number' && by[VITD_IU] > 0) {
+    out.vitaminD = Math.round((by[VITD_IU] / 40) * 100) / 100;
+  }
+  return out;
 }
 
 function toTitleCase(s: string): string {
@@ -80,11 +117,13 @@ function normalize(foods: RawFood[]): FoodHit[] {
   return foods
     .map((food): FoodHit => {
       const grams = food.servingSizeUnit?.toLowerCase() === 'g' ? food.servingSize : undefined;
+      const by = nutrientMap(food);
       return {
         fdcId: food.fdcId,
         name: toTitleCase(food.description ?? 'Unknown food'),
         brand: food.brandName || food.brandOwner || undefined,
-        per100g: macrosOf(food),
+        per100g: macrosOf(by),
+        micros100g: microsOf(by),
         servingGrams: grams && grams > 0 ? grams : undefined,
       };
     })

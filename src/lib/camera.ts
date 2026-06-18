@@ -11,16 +11,30 @@
  */
 import type { CameraView } from 'expo-camera';
 import { ImageManipulator, SaveFormat } from 'expo-image-manipulator';
+import * as ImagePicker from 'expo-image-picker';
 
 export type Capture = { previewUri: string; base64: string };
+
+/** Downscale to ~1024px JPEG + base64 — smaller upload, faster, cheaper tokens. */
+async function process(uri: string): Promise<Capture> {
+  const rendered = await ImageManipulator.manipulate(uri).resize({ width: 1024 }).renderAsync();
+  const out = await rendered.saveAsync({ format: SaveFormat.JPEG, compress: 0.6, base64: true });
+  if (!out.base64) throw new Error('Could not process photo.');
+  return { previewUri: uri, base64: out.base64 };
+}
 
 export async function capturePhoto(camera: CameraView): Promise<Capture> {
   const photo = await camera.takePictureAsync({ quality: 0.7 });
   if (!photo?.uri) throw new Error('Could not capture photo.');
+  return process(photo.uri);
+}
 
-  const rendered = await ImageManipulator.manipulate(photo.uri).resize({ width: 1024 }).renderAsync();
-  const out = await rendered.saveAsync({ format: SaveFormat.JPEG, compress: 0.6, base64: true });
-  if (!out.base64) throw new Error('Could not process photo.');
-
-  return { previewUri: photo.uri, base64: out.base64 };
+/** Pick an existing photo from the library. Returns null if the user cancels. */
+export async function pickFromLibrary(): Promise<Capture | null> {
+  const result = await ImagePicker.launchImageLibraryAsync({
+    mediaTypes: ['images'],
+    quality: 0.7,
+  });
+  if (result.canceled || !result.assets?.[0]?.uri) return null;
+  return process(result.assets[0].uri);
 }

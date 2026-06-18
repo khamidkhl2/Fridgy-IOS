@@ -1,5 +1,5 @@
 /** Onboarding 10 — Plan loading. Animated 0→100% then auto-advances to auth. */
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Animated, Easing, View } from 'react-native';
 import { H } from '@/components/Headline';
 import { Icon } from '@/components/Icon';
@@ -21,7 +21,7 @@ const MESSAGES = [
 export default function PlanLoadingScreen() {
   const { theme } = useTheme();
   const go = useGo();
-  const prog = useRef(new Animated.Value(0)).current;
+  const [prog] = useState(() => new Animated.Value(0));
   const [pct, setPct] = useState(0);
 
   useEffect(() => {

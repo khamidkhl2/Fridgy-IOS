@@ -1,5 +1,5 @@
 /** Add-food modal — search USDA FoodData Central, pick a portion, log it to a meal. */
-import { router, useLocalSearchParams, type Href } from 'expo-router';
+import { router, useLocalSearchParams } from 'expo-router';
 import { useEffect, useMemo, useState } from 'react';
 import { ActivityIndicator, Alert, Pressable, ScrollView, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -24,7 +24,7 @@ import {
   type MealType,
 } from '@/lib/food';
 import { useTheme } from '@/theme/ThemeProvider';
-import { scaleMacros, searchFoods, type FoodHit } from '@/lib/usda';
+import { scaleMacros, scaleMicros, searchFoods, type FoodHit } from '@/lib/usda';
 
 /** Synthesize a search-hit shape from an existing log so the PortionEditor can
  *  re-scale it — per-100g macros are recovered from the stored amount. */
@@ -124,6 +124,7 @@ export default function AddFoodScreen() {
           mealType: meal,
           name: selected.name,
           macros: preview,
+          micros: selected.micros100g ? scaleMicros(selected.micros100g, grams) : undefined,
           grams,
           source: 'manual',
         }));
@@ -195,26 +196,6 @@ export default function AddFoodScreen() {
                 autoCorrect={false}
                 returnKeyType="search"
               />
-              <Pressable
-                onPress={() => router.push(`/scan-meal?meal=${meal}&date=${loggedOn}` as Href)}
-                accessibilityRole="button"
-                accessibilityLabel="Scan a meal with the camera"
-                style={{
-                  flexDirection: 'row',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  gap: 9,
-                  marginTop: 10,
-                  paddingVertical: 13,
-                  borderRadius: 14,
-                  backgroundColor: theme.primarySoft,
-                }}
-              >
-                <Icon name="camera" size={18} color={theme.primary} stroke={2} />
-                <Txt w={700} size={14.5} color={theme.primary}>
-                  Scan a meal with camera
-                </Txt>
-              </Pressable>
             </View>
 
             <ScrollView

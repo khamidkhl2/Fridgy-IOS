@@ -1,9 +1,10 @@
 /**
- * Reusable multi-select onboarding screen: a 2-column grid of emoji chips with
- * support for an exclusive "none" option (clears the rest) and an "other" option
- * that reveals an inline text field. Optional Skip link under Continue.
+ * Reusable multi-select onboarding screen: a single column of full-width rows
+ * (emoji tile + label + check) with support for an exclusive "none" option
+ * (clears the rest), mutually-exclusive groups, a select cap, and an optional
+ * "other" row that reveals an inline text field.
  */
-import { Pressable, ScrollView, useWindowDimensions, View } from 'react-native';
+import { Pressable, ScrollView, View } from 'react-native';
 import { BottomDock } from '@/components/BottomDock';
 import { Field } from '@/components/Field';
 import { H } from '@/components/Headline';
@@ -12,6 +13,8 @@ import { OnboardBar } from '@/components/OnboardBar';
 import { PrimaryButton } from '@/components/PrimaryButton';
 import { ScreenBg } from '@/components/ScreenBg';
 import { Txt } from '@/components/Txt';
+import { Pop } from '@/components/anim';
+import { haptics } from '@/lib/haptics';
 import { ONB_TOTAL } from '@/lib/onboarding';
 import { useTheme } from '@/theme/ThemeProvider';
 
@@ -41,7 +44,6 @@ type Props = {
   onCustomChange: (v: string) => void;
   onBack: () => void;
   onContinue: () => void;
-  onSkip?: () => void;
 };
 
 export function MultiSelectScreen({
@@ -61,11 +63,8 @@ export function MultiSelectScreen({
   onCustomChange,
   onBack,
   onContinue,
-  onSkip,
 }: Props) {
   const { theme } = useTheme();
-  const { width } = useWindowDimensions();
-  const colW = (Math.min(width, 520) - 22 * 2 - 12) / 2;
 
   const pickCount = selected.filter((x) => x !== exclusiveId).length;
   const atCap = maxSelect != null && pickCount >= maxSelect;
@@ -78,6 +77,7 @@ export function MultiSelectScreen({
   };
 
   const toggle = (id: string) => {
+    haptics.selection();
     onSelectedChange((sel) => {
       if (id === exclusiveId) return sel.includes(id) ? [] : [id];
       let next = sel.filter((x) => x !== exclusiveId); // any pick clears the exclusive one
@@ -131,64 +131,69 @@ export function MultiSelectScreen({
 
       <ScrollView
         style={{ flex: 1 }}
-        contentContainerStyle={{ padding: 22, paddingTop: 18 }}
+        contentContainerStyle={{ padding: 22, paddingTop: 18, gap: 12 }}
         showsVerticalScrollIndicator={false}
         keyboardShouldPersistTaps="handled"
       >
-        <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 12 }}>
-          {options.map((o) => {
-            const on = selected.includes(o.id);
-            const blocked = !on && atCap && o.id !== exclusiveId && !replacesSibling(o.id);
-            return (
+        {options.map((o, i) => {
+          const on = selected.includes(o.id);
+          const blocked = !on && atCap && o.id !== exclusiveId && !replacesSibling(o.id);
+          return (
+            <Pop key={o.id} delay={i * 35}>
               <Pressable
-                key={o.id}
                 onPress={() => toggle(o.id)}
                 disabled={blocked}
-                style={{
-                  width: colW,
+                accessibilityRole="checkbox"
+                accessibilityState={{ checked: on, disabled: blocked }}
+                style={({ pressed }) => ({
                   flexDirection: 'row',
                   alignItems: 'center',
-                  gap: 10,
-                  paddingVertical: 14,
-                  paddingHorizontal: 14,
-                  borderRadius: 16,
+                  gap: 15,
+                  padding: 16,
+                  borderRadius: 18,
                   opacity: blocked ? 0.4 : 1,
-                  backgroundColor: on ? theme.primary : theme.surface,
-                  borderWidth: 1.5,
+                  backgroundColor: theme.surface,
+                  borderWidth: 1.6,
                   borderColor: on ? theme.primary : theme.border,
                   boxShadow: on
-                    ? `0px 10px 22px -14px ${theme.primary}`
+                    ? `0px 10px 24px -14px ${theme.primary}`
                     : '0px 2px 10px rgba(30,28,24,0.04)',
-                }}
+                  transform: [{ scale: pressed && !blocked ? 0.985 : 1 }],
+                })}
               >
-                <Txt size={20}>{o.emoji}</Txt>
-                <Txt
-                  w={700}
-                  size={14}
-                  color={on ? theme.onPrimary : theme.ink}
-                  numberOfLines={2}
-                  style={{ flex: 1, letterSpacing: -0.1 }}
+                <View
+                  style={{
+                    width: 48,
+                    height: 48,
+                    borderRadius: 14,
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    backgroundColor: theme.primarySoft,
+                  }}
                 >
+                  <Txt size={24}>{o.emoji}</Txt>
+                </View>
+                <Txt w={800} size={17} color={theme.ink} style={{ flex: 1, letterSpacing: -0.1 }}>
                   {o.label}
                 </Txt>
-                {on && (
-                  <View
-                    style={{
-                      width: 20,
-                      height: 20,
-                      borderRadius: 10,
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      backgroundColor: theme.onPrimary,
-                    }}
-                  >
-                    <Icon name="check" size={12} color={theme.primary} stroke={3} />
-                  </View>
-                )}
+                <View
+                  style={{
+                    width: 26,
+                    height: 26,
+                    borderRadius: 9,
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    borderWidth: on ? 0 : 2,
+                    borderColor: theme.border,
+                    backgroundColor: on ? theme.primary : 'transparent',
+                  }}
+                >
+                  {on && <Icon name="check" size={15} color={theme.onPrimary} stroke={3} />}
+                </View>
               </Pressable>
-            );
-          })}
-        </View>
+            </Pop>
+          );
+        })}
 
         {otherId && selected.includes(otherId) && (
           <Field
@@ -196,20 +201,13 @@ export function MultiSelectScreen({
             onChangeText={onCustomChange}
             placeholder={otherPlaceholder ?? 'Type your own…'}
             autoFocus
-            style={{ marginTop: 14 }}
+            style={{ marginTop: 2 }}
           />
         )}
       </ScrollView>
 
       <BottomDock>
         <PrimaryButton onPress={onContinue}>Continue</PrimaryButton>
-        {onSkip && (
-          <Pressable onPress={onSkip} style={{ paddingVertical: 10, marginTop: 8 }}>
-            <Txt w={700} size={15} color={theme.inkSec} style={{ textAlign: 'center' }}>
-              Skip for now
-            </Txt>
-          </Pressable>
-        )}
       </BottomDock>
     </ScreenBg>
   );

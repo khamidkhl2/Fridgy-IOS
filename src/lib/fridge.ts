@@ -6,6 +6,7 @@ import { useQuery } from '@tanstack/react-query';
 import { useAuth } from './auth';
 import type { Tables } from './database.types';
 import { invalidate, qk } from './queryClient';
+import { estimateExpiry } from './shelfLife';
 import { supabase } from './supabase';
 
 /** A row of `public.fridge_items` (generated); `source` refined to its two
@@ -40,7 +41,15 @@ export async function addFridgeItems(
 
   const { data, error } = await supabase
     .from('fridge_items')
-    .insert(clean.map((it) => ({ user_id: userId, name: it.name, category: it.category, source })))
+    .insert(
+      clean.map((it) => ({
+        user_id: userId,
+        name: it.name,
+        category: it.category,
+        source,
+        expires_at: estimateExpiry(it.category),
+      }))
+    )
     .select();
   if (error) return [];
   invalidate.fridge();
@@ -52,12 +61,26 @@ export async function addFridgeItem(userId: string, name: string): Promise<Fridg
   if (!trimmed) return null;
   const { data, error } = await supabase
     .from('fridge_items')
-    .insert({ user_id: userId, name: trimmed, source: 'manual' })
+    .insert({ user_id: userId, name: trimmed, source: 'manual', expires_at: estimateExpiry(null) })
     .select()
     .maybeSingle();
   if (error) return null;
   invalidate.fridge();
   return (data as FridgeItem | null) ?? null;
+}
+
+/** Delete every fridge item for a user — used when a scan replaces the fridge. */
+export async function clearFridge(userId: string): Promise<boolean> {
+  const { error } = await supabase.from('fridge_items').delete().eq('user_id', userId);
+  if (!error) invalidate.fridge();
+  return !error;
+}
+
+/** Update an item's expiry date (ISO timestamp). Drives the expiry reminders. */
+export async function updateFridgeItemExpiry(id: string, expiresAt: string): Promise<boolean> {
+  const { error } = await supabase.from('fridge_items').update({ expires_at: expiresAt }).eq('id', id);
+  if (!error) invalidate.fridge();
+  return !error;
 }
 
 export async function deleteFridgeItem(id: string): Promise<boolean> {

@@ -5,6 +5,7 @@
  * review screen lets the user confirm and log toward the day.
  */
 import { functionErrorMessage } from './functions';
+import type { MicroMap } from './micros';
 import { supabase } from './supabase';
 
 export type MealItem = {
@@ -15,6 +16,8 @@ export type MealItem = {
   protein: number;
   carbs: number;
   fat: number;
+  /** AI-estimated micros for the visible portion (sparse). */
+  micros?: MicroMap;
 };
 
 export async function scanMeal(base64: string, note?: string): Promise<MealItem[]> {

@@ -1,4 +1,4 @@
-/** Editorial serif headline — uses the active theme's per-theme headline font. */
+/** Headline — soft rounded display sans (Fredoka, via the active theme). */
 import { Text, type StyleProp, type TextStyle } from 'react-native';
 import { useTheme } from '@/theme/ThemeProvider';
 
@@ -19,10 +19,9 @@ export function H({ children, size = 34, color, style, numberOfLines }: HProps) 
         {
           fontFamily: theme.headlineFamily,
           fontSize: size,
-          // serif display fonts have tall ascenders — needs headroom or the tops clip
-          lineHeight: size * 1.2,
+          lineHeight: size * 1.18,
           color: color ?? theme.ink,
-          letterSpacing: -0.2,
+          letterSpacing: -0.4,
         },
         style,
       ]}

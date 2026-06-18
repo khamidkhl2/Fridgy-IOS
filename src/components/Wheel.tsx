@@ -6,7 +6,7 @@
  * aligned, and we settle to the nearest row when scrolling goes idle.
  */
 import { useEffect, useRef, useState, type ReactNode } from 'react';
-import { type NativeScrollEvent, type NativeSyntheticEvent, ScrollView, View } from 'react-native';
+import { FlatList, type NativeScrollEvent, type NativeSyntheticEvent, View } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { hexA } from '@/theme/themes';
 import { useTheme } from '@/theme/ThemeProvider';
@@ -26,16 +26,22 @@ type WheelProps<T extends string | number> = {
 
 export function Wheel<T extends string | number>({ items, value, onChange, format }: WheelProps<T>) {
   const { theme } = useTheme();
-  const ref = useRef<ScrollView>(null);
+  const ref = useRef<FlatList<T>>(null);
   const idle = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [center, setCenter] = useState(() => Math.max(0, items.indexOf(value)));
+
+  // Centering item i means scrolling to offset i*ITEM_H (the PAD top inset puts
+  // item 0 in the centre slot at offset 0).
+  const offsetFor = (i: number) => i * ITEM_H;
 
   // align to the incoming value on mount / when it changes from outside
   useEffect(() => {
     const idx = items.indexOf(value);
     if (idx < 0) return;
-    setCenter(idx);
-    requestAnimationFrame(() => ref.current?.scrollTo({ y: idx * ITEM_H, animated: false }));
+    requestAnimationFrame(() => {
+      setCenter(idx);
+      ref.current?.scrollToOffset({ offset: offsetFor(idx), animated: false });
+    });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [value, items.length]);
 
@@ -50,13 +56,20 @@ export function Wheel<T extends string | number>({ items, value, onChange, forma
 
   const settle = (y: number) => {
     const idx = nearest(y);
-    ref.current?.scrollTo({ y: idx * ITEM_H, animated: true });
+    ref.current?.scrollToOffset({ offset: offsetFor(idx), animated: true });
     if (items[idx] !== value) onChange(items[idx]);
   };
 
   return (
-    <ScrollView
+    <FlatList
       ref={ref}
+      data={items}
+      keyExtractor={(it) => String(it)}
+      extraData={center}
+      // Virtualized: only the visible window mounts, so a 300+ row weight wheel
+      // scrolls smoothly. getItemLayout (fixed row height incl. the PAD inset)
+      // lets scrollToOffset jump anywhere without measuring.
+      getItemLayout={(_, index) => ({ length: ITEM_H, offset: PAD + index * ITEM_H, index })}
       style={{ flex: 1, height: WHEEL_H }}
       showsVerticalScrollIndicator={false}
       snapToInterval={ITEM_H}
@@ -65,24 +78,26 @@ export function Wheel<T extends string | number>({ items, value, onChange, forma
       onScroll={onScroll}
       onMomentumScrollEnd={(e) => settle(e.nativeEvent.contentOffset.y)}
       contentContainerStyle={{ paddingVertical: PAD }}
-    >
-      {items.map((it, i) => {
-        const dist = Math.abs(i - center);
+      initialNumToRender={VISIBLE + 2}
+      maxToRenderPerBatch={VISIBLE + 2}
+      windowSize={5}
+      renderItem={({ item, index }) => {
+        const dist = Math.abs(index - center);
         const on = dist === 0;
         return (
-          <View key={String(it)} style={{ height: ITEM_H, alignItems: 'center', justifyContent: 'center' }}>
+          <View style={{ height: ITEM_H, alignItems: 'center', justifyContent: 'center' }}>
             <Txt
               w={on ? 800 : 600}
               size={on ? 20 : 17}
               color={on ? theme.ink : theme.inkSec}
               style={{ opacity: on ? 1 : dist === 1 ? 0.5 : 0.28, fontVariant: ['tabular-nums'] }}
             >
-              {format ? format(it) : String(it)}
+              {format ? format(item) : String(item)}
             </Txt>
           </View>
         );
-      })}
-    </ScrollView>
+      }}
+    />
   );
 }
 
@@ -109,7 +124,7 @@ export function WheelGroup({ children }: { children: ReactNode }) {
             top: PAD,
             height: ITEM_H,
             borderRadius: 13,
-            backgroundColor: theme.primarySoft,
+            backgroundColor: theme.track,
           }}
         />
         <View style={{ flexDirection: 'row', paddingHorizontal: 12 }}>{children}</View>

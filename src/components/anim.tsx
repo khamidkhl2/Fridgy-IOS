@@ -2,13 +2,13 @@
  * Small motion helpers ported from the prototype's CSS keyframes
  * (fdg-pulse / fdg-blink / fdg-scanY / fdg-pop) using the RN Animated API.
  */
-import { useEffect, useRef, type ReactNode } from 'react';
+import { useEffect, useState, type ReactNode } from 'react';
 import { Animated, Easing, type StyleProp, type ViewStyle } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 
 /** A 0→1→0 looping value (eased in/out), one half-cycle = `duration` ms. */
 function useOscillate(duration: number, enabled = true) {
-  const v = useRef(new Animated.Value(0)).current;
+  const [v] = useState(() => new Animated.Value(0));
   useEffect(() => {
     if (!enabled) {
       v.setValue(1);
@@ -58,7 +58,7 @@ export function Scanline({
   duration?: number;
   thickness?: number;
 }) {
-  const v = useRef(new Animated.Value(0)).current;
+  const [v] = useState(() => new Animated.Value(0));
   useEffect(() => {
     const loop = Animated.loop(
       Animated.sequence([
@@ -101,7 +101,7 @@ export function Pop({
   style?: StyleProp<ViewStyle>;
   children: ReactNode;
 }) {
-  const v = useRef(new Animated.Value(0)).current;
+  const [v] = useState(() => new Animated.Value(0));
   useEffect(() => {
     Animated.timing(v, {
       toValue: 1,

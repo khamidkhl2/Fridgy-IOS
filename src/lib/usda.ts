@@ -10,6 +10,7 @@
  * them to the chosen gram amount.
  */
 import { functionErrorMessage } from './functions';
+import { type MicroKey, type MicroMap, MICRO_KEYS } from './micros';
 import { supabase } from './supabase';
 
 export type Macros = { calories: number; protein: number; carbs: number; fat: number };
@@ -20,6 +21,8 @@ export type FoodHit = {
   brand?: string;
   /** Per-100g macros. */
   per100g: Macros;
+  /** Per-100g micronutrients (sparse map), when reported by USDA. */
+  micros100g?: MicroMap;
   /** Manufacturer serving size in grams, when known (Branded foods). */
   servingGrams?: number;
 };
@@ -50,4 +53,15 @@ export function scaleMacros(per100g: Macros, grams: number): Macros {
     carbs: Math.round(per100g.carbs * factor * 10) / 10,
     fat: Math.round(per100g.fat * factor * 10) / 10,
   };
+}
+
+/** Scale a per-100g micro map to an absolute gram amount, rounded for storage. */
+export function scaleMicros(per100g: MicroMap, grams: number): MicroMap {
+  const factor = grams / 100;
+  const out: MicroMap = {};
+  for (const key of MICRO_KEYS) {
+    const v = per100g[key as MicroKey];
+    if (typeof v === 'number') out[key as MicroKey] = Math.round(v * factor * 100) / 100;
+  }
+  return out;
 }

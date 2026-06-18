@@ -4,11 +4,13 @@
  * `headlineFamily` maps to a loaded font (see typography.ts); `appBg` is a 2-stop gradient.
  */
 
+import { HEADLINE_FONT } from './typography';
+
 export type Theme = {
   id: string;
   name: string;
   mood: string;
-  /** Loaded serif font family used for editorial headlines. */
+  /** Loaded font family used for headlines (a soft rounded sans — see HEADLINE_FONT). */
   headlineFamily: string;
   bg: string;
   surface: string;
@@ -37,7 +39,7 @@ export const THEMES: Theme[] = [
     id: 'sage',
     name: 'Sage',
     mood: 'Warm & encouraging',
-    headlineFamily: 'DMSerifDisplay_400Regular',
+    headlineFamily: HEADLINE_FONT,
     bg: '#F6F1E8',
     surface: '#FFFDF9',
     ink: '#1A1A18',
@@ -62,7 +64,7 @@ export const THEMES: Theme[] = [
     id: 'terracotta',
     name: 'Terracotta',
     mood: 'Cozy & earthy',
-    headlineFamily: 'Spectral_700Bold',
+    headlineFamily: HEADLINE_FONT,
     bg: '#FAF5EF',
     surface: '#FFFFFF',
     ink: '#241A14',
@@ -87,7 +89,7 @@ export const THEMES: Theme[] = [
     id: 'charcoal',
     name: 'Charcoal & Citron',
     mood: 'Bold & modern',
-    headlineFamily: 'Newsreader_600SemiBold',
+    headlineFamily: HEADLINE_FONT,
     bg: '#F4F4F1',
     surface: '#FFFFFF',
     ink: '#1A1D1B',
@@ -112,7 +114,7 @@ export const THEMES: Theme[] = [
     id: 'plum',
     name: 'Plum & Honey',
     mood: 'Elegant & calm',
-    headlineFamily: 'SourceSerif4_600SemiBold',
+    headlineFamily: HEADLINE_FONT,
     bg: '#F7F4F6',
     surface: '#FFFFFF',
     ink: '#20171E',
@@ -137,7 +139,7 @@ export const THEMES: Theme[] = [
     id: 'teal',
     name: 'Teal & Amber',
     mood: 'Fresh & clean',
-    headlineFamily: 'DMSerifDisplay_400Regular',
+    headlineFamily: HEADLINE_FONT,
     bg: '#F2F6F5',
     surface: '#FFFFFF',
     ink: '#15201E',

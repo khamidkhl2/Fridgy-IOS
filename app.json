@@ -10,7 +10,7 @@
     "ios": {
       "icon": "./assets/images/icon.png",
       "bundleIdentifier": "com.fridgyios.app",
-      "buildNumber": "14",
+      "buildNumber": "15",
       "usesAppleSignIn": true,
       "infoPlist": {
         "ITSAppUsesNonExemptEncryption": false
@@ -44,10 +44,22 @@
         "expo-splash-screen",
         {
           "backgroundColor": "#FAF8F4",
+          "ios": {
+            "image": "./assets/images/splash-icon.png",
+            "imageWidth": 76
+          },
           "android": {
             "image": "./assets/images/splash-icon.png",
             "imageWidth": 76
           }
+        }
+      ],
+      "expo-notifications",
+      "expo-image",
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "Allow Fridgy to access your photos so you can scan a meal or fridge from an existing picture."
         }
       ]
     ],

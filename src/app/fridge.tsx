@@ -9,9 +9,12 @@ import { PrimaryButton } from '@/components/PrimaryButton';
 import { ScreenBg } from '@/components/ScreenBg';
 import { Txt } from '@/components/Txt';
 import { useAuth } from '@/lib/auth';
-import { addFridgeItem, deleteFridgeItem, useFridgeItems } from '@/lib/fridge';
+import { addFridgeItem, deleteFridgeItem, updateFridgeItemExpiry, useFridgeItems } from '@/lib/fridge';
+import { foodEmoji } from '@/lib/foodEmoji';
 import { useNav } from '@/lib/nav';
+import { daysUntil } from '@/lib/shelfLife';
 import { useTheme } from '@/theme/ThemeProvider';
+import type { Theme } from '@/theme/themes';
 
 export default function FridgeScreen() {
   const { theme } = useTheme();
@@ -22,6 +25,30 @@ export default function FridgeScreen() {
 
   const [name, setName] = useState('');
   const [adding, setAdding] = useState(false);
+
+  // inline expiry editor: which item is open + its draft date
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [draft, setDraft] = useState<Date>(new Date());
+
+  const openEditor = (id: string, expiresAt: string | null) => {
+    setEditingId(id);
+    setDraft(expiresAt ? new Date(expiresAt) : new Date());
+  };
+
+  const adjustDraft = (deltaDays: number) =>
+    setDraft((prev) => {
+      const next = new Date(prev);
+      next.setDate(next.getDate() + deltaDays);
+      const today = startOfToday();
+      return next < today ? today : next;
+    });
+
+  const saveDraft = async () => {
+    if (!editingId) return;
+    await updateFridgeItemExpiry(editingId, draft.toISOString());
+    setEditingId(null);
+    reload();
+  };
 
   const add = async () => {
     const trimmed = name.trim();
@@ -38,6 +65,7 @@ export default function FridgeScreen() {
   };
 
   const remove = async (id: string) => {
+    if (editingId === id) setEditingId(null);
     await deleteFridgeItem(id);
     reload();
   };
@@ -128,60 +156,174 @@ export default function FridgeScreen() {
             <Txt w={600} size={12.5} color={theme.inkSec} style={{ marginBottom: 2 }}>
               {items.length} item{items.length > 1 ? 's' : ''}
             </Txt>
-            {items.map((it) => (
-              <View
-                key={it.id}
-                style={{
-                  flexDirection: 'row',
-                  alignItems: 'center',
-                  gap: 12,
-                  padding: 13,
-                  backgroundColor: theme.surface,
-                  borderRadius: 14,
-                  boxShadow: '0px 4px 14px -12px rgba(30,28,24,0.14)',
-                }}
-              >
+            {items.map((it) => {
+              const chip = expiryChip(it.expires_at, theme);
+              const editing = editingId === it.id;
+              return (
                 <View
+                  key={it.id}
                   style={{
-                    width: 38,
-                    height: 38,
-                    borderRadius: 11,
-                    backgroundColor: theme.primarySoft,
-                    alignItems: 'center',
-                    justifyContent: 'center',
+                    padding: 13,
+                    backgroundColor: theme.surface,
+                    borderRadius: 14,
+                    boxShadow: '0px 4px 14px -12px rgba(30,28,24,0.14)',
                   }}
                 >
-                  <Icon name={it.source === 'scan' ? 'scan' : 'leaf'} size={18} color={theme.primary} stroke={1.8} />
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
+                    <View
+                      style={{
+                        width: 38,
+                        height: 38,
+                        borderRadius: 11,
+                        backgroundColor: theme.primarySoft,
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                      }}
+                    >
+                      <Txt size={20}>{foodEmoji(it.name)}</Txt>
+                    </View>
+                    <View style={{ flex: 1 }}>
+                      <Txt w={700} size={15} color={theme.ink} numberOfLines={1}>
+                        {it.name}
+                      </Txt>
+                      {/* expiry chip — tap to edit the date */}
+                      <Pressable
+                        onPress={() => (editing ? setEditingId(null) : openEditor(it.id, it.expires_at))}
+                        hitSlop={6}
+                        style={{ flexDirection: 'row', alignItems: 'center', gap: 5, marginTop: 3, alignSelf: 'flex-start' }}
+                      >
+                        <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: chip.color }} />
+                        <Txt w={600} size={12.5} color={chip.color}>
+                          {chip.label}
+                        </Txt>
+                        <Icon name="pencil" size={11} color={theme.inkSec} stroke={2} />
+                      </Pressable>
+                    </View>
+                    <Pressable
+                      onPress={() => remove(it.id)}
+                      hitSlop={8}
+                      style={{
+                        width: 32,
+                        height: 32,
+                        borderRadius: 16,
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        backgroundColor: theme.bg,
+                      }}
+                    >
+                      <Icon name="close" size={16} color={theme.inkSec} stroke={2.4} />
+                    </Pressable>
+                  </View>
+
+                  {/* inline date editor */}
+                  {editing && (
+                    <View
+                      style={{
+                        flexDirection: 'row',
+                        alignItems: 'center',
+                        gap: 12,
+                        marginTop: 13,
+                        paddingTop: 13,
+                        borderTopWidth: 1,
+                        borderTopColor: theme.border,
+                      }}
+                    >
+                      <Txt w={600} size={12.5} color={theme.inkSec}>
+                        Expires
+                      </Txt>
+                      <StepBtn theme={theme} symbol="−" onPress={() => adjustDraft(-1)} label="Minus one day" />
+                      <View style={{ flex: 1, alignItems: 'center' }}>
+                        <Txt w={800} size={14.5} color={theme.ink}>
+                          {fmtDate(draft)}
+                        </Txt>
+                        <Txt w={500} size={11.5} color={theme.inkSec}>
+                          {relativeLabel(draft)}
+                        </Txt>
+                      </View>
+                      <StepBtn theme={theme} symbol="+" onPress={() => adjustDraft(1)} label="Plus one day" />
+                      <Pressable
+                        onPress={saveDraft}
+                        style={{
+                          paddingVertical: 8,
+                          paddingHorizontal: 14,
+                          borderRadius: 11,
+                          backgroundColor: theme.primary,
+                        }}
+                      >
+                        <Txt w={800} size={13} color={theme.onPrimary}>
+                          Save
+                        </Txt>
+                      </Pressable>
+                    </View>
+                  )}
                 </View>
-                <View style={{ flex: 1 }}>
-                  <Txt w={700} size={15} color={theme.ink} numberOfLines={1}>
-                    {it.name}
-                  </Txt>
-                  {it.category ? (
-                    <Txt w={500} size={12.5} color={theme.inkSec} style={{ marginTop: 1 }}>
-                      {it.category}
-                    </Txt>
-                  ) : null}
-                </View>
-                <Pressable
-                  onPress={() => remove(it.id)}
-                  hitSlop={8}
-                  style={{
-                    width: 32,
-                    height: 32,
-                    borderRadius: 16,
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    backgroundColor: theme.bg,
-                  }}
-                >
-                  <Icon name="close" size={16} color={theme.inkSec} stroke={2.4} />
-                </Pressable>
-              </View>
-            ))}
+              );
+            })}
           </View>
         )}
       </ScrollView>
     </ScreenBg>
+  );
+}
+
+// ── expiry helpers ───────────────────────────────────────────────────────────
+
+function startOfToday(): Date {
+  const n = new Date();
+  return new Date(n.getFullYear(), n.getMonth(), n.getDate());
+}
+
+function fmtDate(d: Date): string {
+  return d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+}
+
+/** "Today" / "Tomorrow" / "in N days" for the editor preview. */
+function relativeLabel(d: Date): string {
+  const days = daysUntil(d.toISOString());
+  if (days <= 0) return 'Today';
+  if (days === 1) return 'Tomorrow';
+  return `in ${days} days`;
+}
+
+/** Color-coded chip text + dot for an item's expiry state. */
+function expiryChip(expiresAt: string | null, theme: Theme): { label: string; color: string } {
+  if (!expiresAt) return { label: 'No date', color: theme.inkSec };
+  const d = daysUntil(expiresAt);
+  if (d < 0) return { label: 'Expired', color: theme.protein };
+  if (d === 0) return { label: 'Expires today', color: theme.protein };
+  if (d === 1) return { label: 'Expires tomorrow', color: theme.fat };
+  if (d <= 2) return { label: `${d} days left`, color: theme.fat };
+  return { label: `${d} days left`, color: theme.inkSec };
+}
+
+function StepBtn({
+  theme,
+  symbol,
+  onPress,
+  label,
+}: {
+  theme: Theme;
+  symbol: string;
+  onPress: () => void;
+  label: string;
+}) {
+  return (
+    <Pressable
+      onPress={onPress}
+      accessibilityLabel={label}
+      hitSlop={6}
+      style={{
+        width: 34,
+        height: 34,
+        borderRadius: 11,
+        alignItems: 'center',
+        justifyContent: 'center',
+        backgroundColor: theme.bg,
+      }}
+    >
+      <Txt w={800} size={19} color={theme.ink}>
+        {symbol}
+      </Txt>
+    </Pressable>
   );
 }

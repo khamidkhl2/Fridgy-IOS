@@ -18,6 +18,20 @@ const CORS = {
   'Access-Control-Allow-Methods': 'POST, OPTIONS',
 };
 
+// Micros we ask the model to estimate (keys match the app's MicroKey).
+const MICRO_KEYS = [
+  'iron',
+  'magnesium',
+  'zinc',
+  'calcium',
+  'potassium',
+  'sodium',
+  'vitaminC',
+  'vitaminD',
+  'vitaminB12',
+  'fiber',
+] as const;
+
 type MealItem = {
   name: string;
   grams: number;
@@ -25,6 +39,8 @@ type MealItem = {
   protein: number;
   carbs: number;
   fat: number;
+  /** Sparse per-portion micro estimates (mg, except vitaminD/B12 mcg, fiber g). */
+  micros: Record<string, number>;
 };
 
 function json(body: unknown, status = 200): Response {
@@ -40,14 +56,35 @@ const PROMPT =
   'actually visible. Use short, generic names (e.g. "Grilled chicken breast", ' +
   '"White rice", "Caesar salad"). Estimate realistically; when unsure, give your ' +
   'best single estimate rather than a range. Ignore plates, cutlery, and inedible ' +
-  'items. Respond with JSON only in exactly this shape and nothing else: ' +
-  '{"items":[{"name":"","grams":0,"calories":0,"protein":0,"carbs":0,"fat":0}]} ' +
-  'where grams is the estimated weight of the visible portion and the macros are ' +
-  'in grams for that portion.';
+  'items. Also estimate the key micronutrients in the visible portion from typical ' +
+  'food composition (use 0 only when truly negligible): iron, magnesium, zinc, ' +
+  'calcium, potassium, sodium, vitaminC in MILLIGRAMS; vitaminD and vitaminB12 in ' +
+  'MICROGRAMS; fiber in GRAMS. Respond with JSON only in exactly this shape and ' +
+  'nothing else: {"items":[{"name":"","grams":0,"calories":0,"protein":0,"carbs":0,' +
+  '"fat":0,"micros":{"iron":0,"magnesium":0,"zinc":0,"calcium":0,"potassium":0,' +
+  '"sodium":0,"vitaminC":0,"vitaminD":0,"vitaminB12":0,"fiber":0}}]} where grams is ' +
+  'the estimated weight of the visible portion and the macros are in grams for that ' +
+  'portion.';
 
 function num(v: unknown): number {
   const n = typeof v === 'number' ? v : Number(v);
   return Number.isFinite(n) && n > 0 ? Math.round(n) : 0;
+}
+
+/** Micros keep 2 decimals (small values like vitaminD µg shouldn't round to 0). */
+function microNum(v: unknown): number {
+  const n = typeof v === 'number' ? v : Number(v);
+  return Number.isFinite(n) && n > 0 ? Math.round(n * 100) / 100 : 0;
+}
+
+function microsOf(raw: unknown): Record<string, number> {
+  const o = (raw ?? {}) as Record<string, unknown>;
+  const out: Record<string, number> = {};
+  for (const key of MICRO_KEYS) {
+    const v = microNum(o[key]);
+    if (v > 0) out[key] = v;
+  }
+  return out;
 }
 
 function normalize(raw: unknown): MealItem[] {
@@ -63,6 +100,7 @@ function normalize(raw: unknown): MealItem[] {
         protein: num(o.protein),
         carbs: num(o.carbs),
         fat: num(o.fat),
+        micros: microsOf(o.micros),
       };
     })
     .filter((it) => it.name.length > 0 && it.calories > 0)

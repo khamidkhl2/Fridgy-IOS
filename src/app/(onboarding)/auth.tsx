@@ -88,6 +88,16 @@ function AuthButton({ bg, fg, border, logo, label, onPress, disabled = false, bu
   );
 }
 
+/** Name from the provider (Apple gives it on first sign-in; Google in metadata). */
+function providerNameFrom(user: { user_metadata?: Record<string, unknown> | null }): string {
+  const meta = user.user_metadata ?? {};
+  return (
+    (typeof meta.full_name === 'string' && meta.full_name) ||
+    (typeof meta.name === 'string' && meta.name) ||
+    ''
+  );
+}
+
 export default function AuthScreen() {
   const { theme } = useTheme();
   const { finish, data: onboardingData } = useOnboarding();
@@ -112,15 +122,20 @@ export default function AuthScreen() {
   // native (no OAuth redirect needed since the session already exists).
   const finishing = !signInMode && !!session?.user;
   const completed = useRef(false);
+  // Set once a provider button handles sign-in this mount, so the fallback effect
+  // below (which only covers *arriving already-authenticated*) doesn't double-run.
+  const handled = useRef(false);
   useEffect(() => {
-    if (!finishing || completed.current) return;
+    if (!finishing || completed.current || handled.current) return;
     completed.current = true;
-    const userId = session!.user.id;
+    const user = session!.user;
     (async () => {
       await finish();
-      // Don't clobber an already-set-up profile with the in-memory defaults.
-      const existing = await fetchProfile(userId);
-      if (!existing?.onboarded) await saveOnboardingToProfile(userId, onboardingData);
+      // Don't clobber an already-set-up profile with the in-memory answers.
+      const existing = await fetchProfile(user.id);
+      if (!existing?.onboarded) {
+        await saveOnboardingToProfile(user.id, { ...onboardingData, name: onboardingData.name || providerNameFrom(user) });
+      }
       refreshProfile();
       go.replace('/home');
     })().catch(() => {
@@ -132,6 +147,7 @@ export default function AuthScreen() {
 
   const onOAuth = async (provider: 'google' | 'apple') => {
     setError(null);
+    handled.current = true; // this button owns the post-sign-in routing
     setBusyProvider(provider);
 
     // Persist onboarding answers first (only when finishing onboarding) — on web
@@ -142,28 +158,52 @@ export default function AuthScreen() {
     if (signInError) {
       setError(signInError.message);
       setBusyProvider(null);
+      handled.current = false;
       return;
     }
-    setBusyProvider(null);
 
     // Web has redirected; the launch gate (index) routes by onboarding status.
-    // Native onboarding completion is handled by the effect above once the
-    // session lands.
-    if (Platform.OS === 'web' || !signInMode) return;
+    if (Platform.OS === 'web') {
+      setBusyProvider(null);
+      return;
+    }
 
-    // Plain sign-in: only onboarded accounts go to the app. A not-yet-onboarded
-    // account is effectively new (it skipped setup) — send it through onboarding.
-    const { data } = await supabase.auth.getUser();
-    const onboarded = data.user ? (await fetchProfile(data.user.id))?.onboarded === true : false;
-    if (onboarded) {
-      go.replace('/home');
-    } else {
+    // Native: the session is now on the client. Read the account's existing
+    // onboarding status straight from the DB *before* the profile providers
+    // react, so we can tell a returning account from a brand-new one.
+    const { data: userData } = await supabase.auth.getUser();
+    const user = userData.user;
+    setBusyProvider(null);
+    if (!user) {
+      handled.current = false; // sign-in cancelled / no session
+      return;
+    }
+
+    const wasOnboarded = (await fetchProfile(user.id))?.onboarded === true;
+
+    // Existing, fully-set-up account: never overwrite their plan — greet + enter.
+    if (wasOnboarded) {
+      refreshProfile();
+      Alert.alert('Welcome back', 'You already have an account — signing you in.', [
+        { text: 'Continue', onPress: () => go.replace('/home') },
+      ]);
+      return;
+    }
+
+    // Signed into an account that never finished setup — build a plan now.
+    if (signInMode) {
       Alert.alert(
         "Let's set up your plan",
-        "This account hasn't finished setup yet. We'll walk you through a quick onboarding to build your plan.",
-        [{ text: 'Continue', onPress: () => go.replace('/name') }]
+        "This account hasn't finished setup yet. We'll build your plan now.",
+        [{ text: 'Continue', onPress: () => go.replace('/goal') }]
       );
+      return;
     }
+
+    // New account finishing onboarding: save answers (+ provider name) and enter.
+    await saveOnboardingToProfile(user.id, { ...onboardingData, name: onboardingData.name || providerNameFrom(user) });
+    refreshProfile();
+    go.replace('/home');
   };
 
   // Already authenticated and finishing onboarding: show a brief loader instead
@@ -245,7 +285,7 @@ export default function AuthScreen() {
                 <Txt w={500} size={15} color={theme.inkSec}>
                   New here?{' '}
                 </Txt>
-                <Txt w={800} size={15} color={theme.ink} onPress={() => go.replace('/name')} style={{ textDecorationLine: 'underline' }}>
+                <Txt w={800} size={15} color={theme.ink} onPress={() => go.replace('/goal')} style={{ textDecorationLine: 'underline' }}>
                   Get started
                 </Txt>
               </>

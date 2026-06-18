@@ -5,11 +5,12 @@ import { Alert, Pressable, ScrollView, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Pop } from '@/components/anim';
 import { H } from '@/components/Headline';
-import { Icon, type IconName } from '@/components/Icon';
+import { Icon } from '@/components/Icon';
 import { PrimaryButton } from '@/components/PrimaryButton';
 import { ScreenBg } from '@/components/ScreenBg';
 import { Txt } from '@/components/Txt';
 import { useAuth } from '@/lib/auth';
+import { foodEmoji } from '@/lib/foodEmoji';
 import { addFoodLog, localDateISO, MEALS, type MealType } from '@/lib/food';
 import { useNav } from '@/lib/nav';
 import { getActiveRecipe, type RecipeView } from '@/lib/recipes';
@@ -22,13 +23,6 @@ function toMealKey(s: string): MealType {
   const k = s.toLowerCase() as MealType;
   return MEAL_KEYS.includes(k) ? k : 'dinner';
 }
-
-const MEAL_ICON: Record<string, IconName> = {
-  Breakfast: 'leaf',
-  Lunch: 'drumstick',
-  Dinner: 'wheat',
-  Snack: 'apple',
-};
 
 export default function RecipeScreen() {
   const { theme } = useTheme();
@@ -92,8 +86,6 @@ export default function RecipeScreen() {
     );
   }
 
-  const icon = MEAL_ICON[recipe.mealType] ?? 'leaf';
-
   return (
     <ScreenBg>
       <ScrollView
@@ -139,12 +131,13 @@ export default function RecipeScreen() {
               width: 96,
               height: 96,
               borderRadius: 28,
-              backgroundColor: theme.primary,
+              backgroundColor: theme.surface,
               alignItems: 'center',
               justifyContent: 'center',
+              boxShadow: '0px 8px 22px -12px rgba(30,28,24,0.2)',
             }}
           >
-            <Icon name={icon} size={44} color={theme.onPrimary} stroke={1.6} />
+            <Txt style={{ fontSize: 52 }}>{foodEmoji(recipe.title)}</Txt>
           </View>
         </View>
 
@@ -169,9 +162,9 @@ export default function RecipeScreen() {
           </H>
 
           <View style={{ flexDirection: 'row', gap: 18, marginTop: 12 }}>
-            {recipe.minutes > 0 && <Meta icon="flame" label={`${recipe.minutes} min`} />}
-            {recipe.calories > 0 && <Meta icon="scale" label={`${recipe.calories} cal`} />}
-            {recipe.usesCount > 0 && <Meta icon="fridge" label={`Uses ${recipe.usesCount}`} />}
+            {recipe.minutes > 0 && <Meta value={`${recipe.minutes}`} label="min" />}
+            {recipe.calories > 0 && <Meta value={`${recipe.calories}`} label="cal" />}
+            {recipe.usesCount > 0 && <Meta value={`${recipe.usesCount}`} label="from fridge" />}
           </View>
 
           {recipe.description ? (
@@ -260,7 +253,7 @@ export default function RecipeScreen() {
               setCooking(true);
             }}
           >
-            Start cooking · {recipe.steps.length} steps
+            {`Start cooking · ${recipe.steps.length} steps`}
           </PrimaryButton>
         </View>
       )}
@@ -268,12 +261,14 @@ export default function RecipeScreen() {
   );
 }
 
-function Meta({ icon, label }: { icon: IconName; label: string }) {
+function Meta({ value, label }: { value: string; label: string }) {
   const { theme } = useTheme();
   return (
-    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-      <Icon name={icon} size={16} color={theme.primary} stroke={1.8} />
-      <Txt w={700} size={13.5} color={theme.ink}>
+    <View style={{ flexDirection: 'row', alignItems: 'baseline', gap: 5 }}>
+      <Txt w={800} size={16} color={theme.ink}>
+        {value}
+      </Txt>
+      <Txt w={600} size={13} color={theme.inkSec}>
         {label}
       </Txt>
     </View>

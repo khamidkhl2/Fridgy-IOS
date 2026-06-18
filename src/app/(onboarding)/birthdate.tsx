@@ -47,7 +47,7 @@ export default function BirthDateScreen() {
       </View>
 
       <BottomDock>
-        <PrimaryButton onPress={() => go.push('/body')}>Continue</PrimaryButton>
+        <PrimaryButton onPress={() => go.push('/measurements')}>Continue</PrimaryButton>
       </BottomDock>
     </ScreenBg>
   );

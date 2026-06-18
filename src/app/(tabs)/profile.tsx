@@ -1,47 +1,37 @@
-/** Screen 6 — Profile. Identity, stats, and the settings list (houses Appearance). */
+/** Profile tab — identity + grouped settings (see photos #7.1 / #7.2). */
+import { useRouter, type Href } from 'expo-router';
 import { Alert, Linking, Pressable, ScrollView, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { Icon, type IconName } from '@/components/Icon';
+import { H } from '@/components/Headline';
+import { Icon } from '@/components/Icon';
 import { ScreenBg } from '@/components/ScreenBg';
 import { Txt } from '@/components/Txt';
 import { useAuth } from '@/lib/auth';
+import { haptics } from '@/lib/haptics';
 import { PRIVACY_URL, SUPPORT_EMAIL, TERMS_URL } from '@/lib/links';
-import {
-  currentStreak,
-  loggedDays,
-  logsForDay,
-  sumMacros,
-  useRecentLogs,
-  useToday,
-} from '@/lib/food';
-import { useNav, type Dest } from '@/lib/nav';
+import { useNav } from '@/lib/nav';
 import { useProfile } from '@/lib/profile';
-import { useSavedRecipes } from '@/lib/recipes';
 import { useTheme } from '@/theme/ThemeProvider';
 import { THEMES } from '@/theme/themes';
+
+type Row = { emoji: string; label: string; detail?: string; onPress: () => void };
 
 export default function ProfileScreen() {
   const { theme, themeIndex } = useTheme();
   const { signOut, deleteAccount } = useAuth();
   const profile = useProfile();
+  const router = useRouter();
   const nav = useNav();
   const insets = useSafeAreaInsets();
 
-  const { logs } = useRecentLogs();
-  const { count: savedCount } = useSavedRecipes();
-  const today = useToday();
-  const kcalToday = sumMacros(logsForDay(logs, today)).calories;
-  const streak = currentStreak(loggedDays(logs), today);
-
-  const STATS = [
-    { v: String(streak), l: 'Day streak' },
-    { v: kcalToday.toLocaleString(), l: 'kcal today' },
-    { v: String(savedCount), l: 'Saved' },
-  ];
+  const push = (path: string) => {
+    haptics.light();
+    router.push(path as Href);
+  };
 
   const logout = async () => {
     await signOut();
-    nav.go('welcome'); // session cleared → launch gate shows the welcome/auth flow
+    nav.go('welcome');
   };
 
   const confirmDelete = () => {
@@ -66,81 +56,61 @@ export default function ProfileScreen() {
     );
   };
 
-  // grouped: your plan & content → preferences → support & legal
-  const rows: { icon: IconName; label: string; detail?: string; go?: Dest; action?: () => void }[] = [
-    {
-      icon: 'book',
-      label: 'Saved recipes',
-      detail: savedCount ? String(savedCount) : undefined,
-      go: 'savedRecipes',
-    },
-    { icon: 'sparkle', label: 'Appearance', detail: THEMES[themeIndex].name, go: 'settings' },
-    { icon: 'scale', label: 'Units', go: 'units' },
-    {
-      icon: 'help',
-      label: 'Help & feedback',
-      action: () =>
-        Linking.openURL(`mailto:${SUPPORT_EMAIL}?subject=Fridgy%20feedback`).catch(() => {}),
-    },
-    { icon: 'book', label: 'Privacy Policy', action: () => Linking.openURL(PRIVACY_URL).catch(() => {}) },
-    { icon: 'book', label: 'Terms of Service', action: () => Linking.openURL(TERMS_URL).catch(() => {}) },
+  const account: Row[] = [
+    { emoji: '👤', label: 'Personal Details', onPress: () => push('/personal-details') },
+    { emoji: '🎯', label: 'Goals & Body', onPress: () => push('/goals-body') },
+  ];
+  const preferences: Row[] = [
+    { emoji: '📏', label: 'Units', onPress: () => { haptics.light(); nav.go('units'); } },
+    { emoji: '🎨', label: 'Appearance', detail: THEMES[themeIndex].name, onPress: () => { haptics.light(); nav.go('settings'); } },
+    { emoji: '🔔', label: 'Notifications', onPress: () => { haptics.light(); nav.go('notifications'); } },
+    { emoji: '📖', label: 'Saved recipes', onPress: () => { haptics.light(); nav.go('savedRecipes'); } },
+  ];
+  const support: Row[] = [
+    { emoji: '💬', label: 'Help & feedback', onPress: () => Linking.openURL(`mailto:${SUPPORT_EMAIL}?subject=Fridgy%20feedback`).catch(() => {}) },
+    { emoji: '🔒', label: 'Privacy Policy', onPress: () => Linking.openURL(PRIVACY_URL).catch(() => {}) },
+    { emoji: '📄', label: 'Terms of Service', onPress: () => Linking.openURL(TERMS_URL).catch(() => {}) },
   ];
 
   return (
     <ScreenBg>
       <ScrollView
-        contentContainerStyle={{ paddingTop: insets.top + 10, paddingBottom: 28 }}
+        contentContainerStyle={{ paddingTop: insets.top + 8, paddingBottom: 40 }}
         showsVerticalScrollIndicator={false}
       >
-        {/* identity — tap to edit profile */}
+        <H size={32} style={{ paddingHorizontal: 22, letterSpacing: -0.3 }}>
+          Profile
+        </H>
+
+        {/* identity */}
         <Pressable
-          onPress={() => nav.go('editProfile')}
+          onPress={() => push('/personal-details')}
           accessibilityRole="button"
-          accessibilityLabel="Edit profile"
-          style={{ flexDirection: 'row', alignItems: 'center', gap: 15, paddingHorizontal: 22 }}
+          accessibilityLabel="Personal details"
+          style={({ pressed }) => ({
+            flexDirection: 'row',
+            alignItems: 'center',
+            gap: 14,
+            marginHorizontal: 22,
+            marginTop: 16,
+            padding: 16,
+            borderRadius: 20,
+            backgroundColor: theme.surface,
+            boxShadow: '0px 6px 16px -12px rgba(30,28,24,0.16)',
+            transform: [{ scale: pressed ? 0.99 : 1 }],
+          })}
         >
-          <View
-            style={{
-              width: 64,
-              height: 64,
-              borderRadius: 20,
-              backgroundColor: theme.primarySoft,
-              alignItems: 'center',
-              justifyContent: 'center',
-            }}
-          >
-            <Txt style={{ fontFamily: theme.headlineFamily, fontSize: 26, color: theme.primary }}>
-              {profile.initials}
-            </Txt>
+          <View style={{ width: 60, height: 60, borderRadius: 30, backgroundColor: theme.primarySoft, alignItems: 'center', justifyContent: 'center' }}>
+            <Icon name="user" size={30} color={theme.primary} stroke={1.9} />
           </View>
           <View style={{ flex: 1 }}>
-            <Txt w={800} size={21} color={theme.ink} numberOfLines={1} style={{ letterSpacing: -0.3 }}>
+            <Txt w={800} size={19} color={theme.ink} numberOfLines={1} style={{ letterSpacing: -0.3 }}>
               {profile.displayName}
             </Txt>
             {profile.email ? (
-              <Txt w={500} size={13} color={theme.inkSec} numberOfLines={1} style={{ marginTop: 1 }}>
+              <Txt w={500} size={13} color={theme.inkSec} numberOfLines={1} style={{ marginTop: 2 }}>
                 {profile.email}
               </Txt>
-            ) : null}
-            {profile.goal ? (
-              <View
-                style={{
-                  marginTop: 6,
-                  alignSelf: 'flex-start',
-                  flexDirection: 'row',
-                  alignItems: 'center',
-                  gap: 6,
-                  paddingVertical: 4,
-                  paddingHorizontal: 11,
-                  borderRadius: 20,
-                  backgroundColor: theme.primarySoft,
-                }}
-              >
-                <Icon name={profile.goalIcon} size={13} color={theme.primary} stroke={2} />
-                <Txt w={700} size={12.5} color={theme.primary}>
-                  {profile.goal}
-                </Txt>
-              </View>
             ) : null}
           </View>
           <View style={{ transform: [{ scaleX: -1 }] }}>
@@ -148,109 +118,81 @@ export default function ProfileScreen() {
           </View>
         </Pressable>
 
-        {/* stats */}
-        <View style={{ flexDirection: 'row', gap: 11, paddingHorizontal: 22, paddingTop: 20 }}>
-          {STATS.map((s, i) => (
-            <View
-              key={i}
-              style={{
-                flex: 1,
-                backgroundColor: theme.surface,
-                borderRadius: 16,
-                paddingVertical: 14,
-                paddingHorizontal: 10,
-                alignItems: 'center',
-                boxShadow: '0px 6px 16px -12px rgba(30,28,24,0.16)',
-              }}
-            >
-              <Txt w={800} size={22} color={theme.ink} style={{ letterSpacing: -0.5 }}>
-                {s.v}
-              </Txt>
-              <Txt w={600} size={11.5} color={theme.inkSec} style={{ marginTop: 3 }}>
-                {s.l}
-              </Txt>
-            </View>
-          ))}
+        <Section title="Account" rows={account} />
+        <Section title="Preferences" rows={preferences} />
+        <Section title="Support" rows={support} />
+
+        {/* account actions */}
+        <View style={{ marginTop: 24, marginHorizontal: 22, gap: 12 }}>
+          <Pressable
+            onPress={() => { haptics.light(); logout(); }}
+            style={{ paddingVertical: 16, borderRadius: 16, alignItems: 'center', backgroundColor: theme.surface, borderWidth: 1.5, borderColor: theme.border }}
+          >
+            <Txt w={800} size={15.5} color={theme.protein}>
+              Log out
+            </Txt>
+          </Pressable>
+          <Pressable onPress={confirmDelete} style={{ paddingVertical: 12, alignItems: 'center' }}>
+            <Txt w={700} size={13.5} color={theme.inkSec} style={{ textDecorationLine: 'underline' }}>
+              Delete account
+            </Txt>
+          </Pressable>
         </View>
-
-        {/* settings list */}
-        <View
-          style={{
-            marginHorizontal: 22,
-            marginTop: 20,
-            backgroundColor: theme.surface,
-            borderRadius: 18,
-            overflow: 'hidden',
-            boxShadow: '0px 6px 16px -12px rgba(30,28,24,0.16)',
-          }}
-        >
-          {rows.map((r, i) => (
-            <Pressable
-              key={i}
-              onPress={() => (r.action ? r.action() : r.go && nav.go(r.go))}
-              style={{
-                flexDirection: 'row',
-                alignItems: 'center',
-                gap: 13,
-                paddingVertical: 14,
-                paddingHorizontal: 16,
-                borderTopWidth: i ? 1 : 0,
-                borderTopColor: theme.border,
-              }}
-            >
-              <View
-                style={{
-                  width: 34,
-                  height: 34,
-                  borderRadius: 10,
-                  backgroundColor: theme.bg,
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                }}
-              >
-                <Icon name={r.icon} size={18} color={theme.primary} stroke={1.8} />
-              </View>
-              <Txt w={700} size={15.5} color={theme.ink} style={{ flex: 1 }}>
-                {r.label}
-              </Txt>
-              {r.detail && (
-                <Txt w={600} size={13.5} color={theme.inkSec} style={{ marginRight: 4 }}>
-                  {r.detail}
-                </Txt>
-              )}
-              <View style={{ transform: [{ scaleX: -1 }] }}>
-                <Icon name="chevronLeft" size={17} color={theme.inkSec} stroke={2} />
-              </View>
-            </Pressable>
-          ))}
-        </View>
-
-        {/* log out */}
-        <Pressable
-          onPress={logout}
-          style={{
-            marginHorizontal: 22,
-            marginTop: 16,
-            paddingVertical: 16,
-            borderRadius: 16,
-            alignItems: 'center',
-            backgroundColor: theme.surface,
-            borderWidth: 1.5,
-            borderColor: theme.border,
-          }}
-        >
-          <Txt w={800} size={15.5} color={theme.protein}>
-            Log out
-          </Txt>
-        </Pressable>
-
-        {/* delete account (App Store 5.1.1(v)) */}
-        <Pressable onPress={confirmDelete} style={{ marginTop: 14, paddingVertical: 12, alignItems: 'center' }}>
-          <Txt w={700} size={13.5} color={theme.inkSec} style={{ textDecorationLine: 'underline' }}>
-            Delete account
-          </Txt>
-        </Pressable>
       </ScrollView>
     </ScreenBg>
+  );
+}
+
+function Section({ title, rows }: { title: string; rows: Row[] }) {
+  const { theme } = useTheme();
+  return (
+    <View style={{ marginTop: 22 }}>
+      <Txt w={800} size={12.5} color={theme.inkSec} style={{ textTransform: 'uppercase', letterSpacing: 0.6, marginLeft: 26, marginBottom: 10 }}>
+        {title}
+      </Txt>
+      <View
+        style={{
+          marginHorizontal: 22,
+          backgroundColor: theme.surface,
+          borderRadius: 18,
+          overflow: 'hidden',
+          boxShadow: '0px 6px 16px -12px rgba(30,28,24,0.16)',
+        }}
+      >
+        {rows.map((r, i) => (
+          <Pressable
+            key={r.label}
+            onPress={r.onPress}
+            accessibilityRole="button"
+            accessibilityLabel={r.label}
+            style={({ pressed }) => ({
+              flexDirection: 'row',
+              alignItems: 'center',
+              gap: 13,
+              paddingVertical: 14,
+              paddingHorizontal: 16,
+              borderTopWidth: i ? 1 : 0,
+              borderTopColor: theme.border,
+              backgroundColor: pressed ? theme.bg : 'transparent',
+            })}
+          >
+            <View style={{ width: 36, height: 36, borderRadius: 11, backgroundColor: theme.bg, alignItems: 'center', justifyContent: 'center' }}>
+              <Txt size={18}>{r.emoji}</Txt>
+            </View>
+            <Txt w={700} size={15.5} color={theme.ink} style={{ flex: 1 }}>
+              {r.label}
+            </Txt>
+            {r.detail && (
+              <Txt w={600} size={13.5} color={theme.inkSec} style={{ marginRight: 4 }}>
+                {r.detail}
+              </Txt>
+            )}
+            <View style={{ transform: [{ scaleX: -1 }] }}>
+              <Icon name="chevronLeft" size={17} color={theme.inkSec} stroke={2} />
+            </View>
+          </Pressable>
+        ))}
+      </View>
+    </View>
   );
 }

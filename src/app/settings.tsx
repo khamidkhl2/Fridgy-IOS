@@ -1,9 +1,10 @@
-/** Screen 7 — Appearance. In-app theme picker; the whole app re-tints instantly. */
-import { Pressable, ScrollView, View } from 'react-native';
+/** Screen 7 — Appearance. In-app theme picker + haptics toggle. */
+import { Pressable, ScrollView, Switch, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Icon } from '@/components/Icon';
 import { ScreenBg } from '@/components/ScreenBg';
 import { Txt } from '@/components/Txt';
+import { useHapticsEnabled } from '@/lib/haptics';
 import { useNav } from '@/lib/nav';
 import { useTheme, type ThemeMode } from '@/theme/ThemeProvider';
 import { THEMES } from '@/theme/themes';
@@ -16,6 +17,7 @@ const MODES: { id: ThemeMode; label: string }[] = [
 
 export default function SettingsScreen() {
   const { theme, themeIndex, setThemeIndex, mode, setMode } = useTheme();
+  const [hapticsOn, setHapticsOn] = useHapticsEnabled();
   const nav = useNav();
   const insets = useSafeAreaInsets();
 
@@ -47,6 +49,41 @@ export default function SettingsScreen() {
         contentContainerStyle={{ paddingHorizontal: 22, paddingTop: 20, paddingBottom: Math.max(insets.bottom, 20) + 10 }}
         showsVerticalScrollIndicator={false}
       >
+        {/* haptics */}
+        <Txt w={800} size={12.5} color={theme.inkSec} style={{ textTransform: 'uppercase', letterSpacing: 0.6, marginBottom: 10 }}>
+          Feedback
+        </Txt>
+        <View
+          style={{
+            flexDirection: 'row',
+            alignItems: 'center',
+            gap: 13,
+            padding: 16,
+            marginBottom: 26,
+            backgroundColor: theme.surface,
+            borderRadius: 16,
+            boxShadow: '0px 2px 8px rgba(30,28,24,0.04)',
+          }}
+        >
+          <View style={{ width: 36, height: 36, borderRadius: 11, backgroundColor: theme.bg, alignItems: 'center', justifyContent: 'center' }}>
+            <Txt size={18}>📳</Txt>
+          </View>
+          <View style={{ flex: 1 }}>
+            <Txt w={800} size={15.5} color={theme.ink}>
+              Haptics
+            </Txt>
+            <Txt w={500} size={13} color={theme.inkSec} style={{ marginTop: 2, lineHeight: 18 }}>
+              Subtle vibration feedback on taps and actions.
+            </Txt>
+          </View>
+          <Switch
+            value={hapticsOn}
+            onValueChange={setHapticsOn}
+            trackColor={{ true: theme.primary, false: theme.track }}
+            thumbColor={theme.onPrimary}
+          />
+        </View>
+
         {/* light / dark / system */}
         <Txt w={800} size={12.5} color={theme.inkSec} style={{ textTransform: 'uppercase', letterSpacing: 0.6, marginBottom: 10 }}>
           Mode

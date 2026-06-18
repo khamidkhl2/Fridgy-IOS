@@ -1,23 +1,16 @@
-/** Onboarding 3 — Dietary style (multi-select). */
-import { MultiSelectScreen, type MultiOption } from '@/components/MultiSelectScreen';
-import { DIET_PRIMARY_GROUP, stepOf, useGo, useOnboarding } from '@/lib/onboarding';
+/** Onboarding — Dietary style (single-select). */
+import { SingleSelectScreen, type SingleOption } from '@/components/SingleSelectScreen';
+import { stepOf, useGo, useOnboarding } from '@/lib/onboarding';
 
-const OPTIONS: MultiOption[] = [
-  { id: 'No restrictions', emoji: '🚫', label: 'No restrictions' },
-  { id: 'Vegetarian', emoji: '🌱', label: 'Vegetarian' },
-  { id: 'Vegan', emoji: '🌿', label: 'Vegan' },
-  { id: 'Pescatarian', emoji: '🐟', label: 'Pescatarian' },
-  { id: 'Flexitarian', emoji: '🫐', label: 'Flexitarian' },
-  { id: 'Mediterranean', emoji: '🧄', label: 'Mediterranean' },
-  { id: 'Keto / Low-carb', emoji: '🥩', label: 'Keto / Low-carb' },
-  { id: 'Paleo', emoji: '🫙', label: 'Paleo' },
-  { id: 'Gluten-free', emoji: '🌾', label: 'Gluten-free' },
-  { id: 'Dairy-free', emoji: '🥛', label: 'Dairy-free' },
+const OPTIONS: SingleOption[] = [
+  { id: 'Balanced', emoji: '🍽️', label: 'Balanced', desc: 'A bit of everything' },
+  { id: 'Vegetarian', emoji: '🌱', label: 'Vegetarian', desc: 'No meat or fish' },
+  { id: 'Pescatarian', emoji: '🐟', label: 'Pescatarian', desc: 'Fish, no other meat' },
+  { id: 'Mediterranean', emoji: '🫒', label: 'Mediterranean', desc: 'Veg, fish, olive oil' },
+  { id: 'Keto / Low-carb', emoji: '🥑', label: 'Keto / Low-carb', desc: 'Low carb, high fat' },
+  { id: 'Paleo', emoji: '🍖', label: 'Paleo', desc: 'Whole foods, no grains' },
   { id: 'Halal', emoji: '☪️', label: 'Halal' },
   { id: 'Kosher', emoji: '✡️', label: 'Kosher' },
-  { id: 'Whole30', emoji: '🧘', label: 'Whole30' },
-  { id: 'Low FODMAP', emoji: '📉', label: 'Low FODMAP' },
-  { id: 'Other', emoji: '✏️', label: 'Other' },
 ];
 
 export default function DietaryStyleScreen() {
@@ -25,23 +18,15 @@ export default function DietaryStyleScreen() {
   const go = useGo();
 
   return (
-    <MultiSelectScreen
+    <SingleSelectScreen
       step={stepOf('dietary')}
       title="Do you follow a specific diet?"
-      subtitle="Pick up to 3 — we'll tailor recipes to match."
+      subtitle="We'll tailor recipes and targets to match."
       options={OPTIONS}
-      exclusiveId="No restrictions"
-      exclusiveGroups={[DIET_PRIMARY_GROUP]}
-      maxSelect={3}
-      otherId="Other"
-      otherPlaceholder="e.g. raw, low-sodium…"
-      selected={data.dietaryStyles}
-      custom={data.customDietaryStyle}
-      onSelectedChange={(fn) => update((prev) => ({ dietaryStyles: fn(prev.dietaryStyles) }))}
-      onCustomChange={(v) => update({ customDietaryStyle: v })}
+      value={data.dietaryStyles[0] ?? ''}
+      onChange={(id) => update({ dietaryStyles: [id] })}
       onBack={go.back}
       onContinue={() => go.push('/allergies')}
-      onSkip={() => go.push('/allergies')}
     />
   );
 }

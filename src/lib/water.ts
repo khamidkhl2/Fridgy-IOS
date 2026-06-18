@@ -112,48 +112,49 @@ async function sumWater(userId: string, dayISO: string): Promise<number> {
   return data.reduce((sum, r) => sum + (r.amount_ml ?? 0), 0);
 }
 
-/** Today's water total (ml) with optimistic add / undo helpers. Backed by the
- *  shared query cache (key per user+day). */
-export function useWaterToday(): {
+type WaterDay = {
   totalMl: number;
   add: (ml: number) => Promise<void>;
   undo: () => Promise<void>;
   reload: () => void;
-} {
+};
+
+/** A given day's water total (ml) with optimistic add / undo helpers. Backed by
+ *  the shared query cache (key per user+day). */
+export function useWaterDay(dayISO: string): WaterDay {
   const { session } = useAuth();
   const userId = session?.user?.id ?? null;
-  const today = useToday(); // live: rolls over at midnight without a restart
 
   const q = useQuery({
-    queryKey: qk.water(userId, today),
-    queryFn: () => sumWater(userId!, today),
+    queryKey: qk.water(userId, dayISO),
+    queryFn: () => sumWater(userId!, dayISO),
     enabled: !!userId,
   });
 
   const add = useCallback(
     async (ml: number) => {
       if (!userId) return;
-      const key = qk.water(userId, today);
+      const key = qk.water(userId, dayISO);
       queryClient.setQueryData<number>(key, (t) => (t ?? 0) + ml); // optimistic
       const { error } = await supabase
         .from('water_logs')
-        .insert({ user_id: userId, logged_on: today, amount_ml: ml });
+        .insert({ user_id: userId, logged_on: dayISO, amount_ml: ml });
       if (error) {
         queryClient.invalidateQueries({ queryKey: key }); // roll back to server truth
         throw error; // let the caller surface it (the optimistic bump just vanished)
       }
     },
-    [userId, today]
+    [userId, dayISO]
   );
 
   const undo = useCallback(async () => {
     if (!userId) return;
-    const key = qk.water(userId, today);
+    const key = qk.water(userId, dayISO);
     const { data } = await supabase
       .from('water_logs')
       .select('id, amount_ml')
       .eq('user_id', userId)
-      .eq('logged_on', today)
+      .eq('logged_on', dayISO)
       .order('created_at', { ascending: false })
       .limit(1);
     const last = data?.[0];
@@ -162,7 +163,12 @@ export function useWaterToday(): {
     const { error } = await supabase.from('water_logs').delete().eq('id', last.id);
     queryClient.invalidateQueries({ queryKey: key });
     if (error) throw error;
-  }, [userId, today]);
+  }, [userId, dayISO]);
 
   return { totalMl: q.data ?? 0, add, undo, reload: () => void q.refetch() };
+}
+
+/** Today's water — `useWaterDay` bound to the live local day (rolls at midnight). */
+export function useWaterToday(): WaterDay {
+  return useWaterDay(useToday());
 }

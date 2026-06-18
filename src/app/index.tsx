@@ -32,7 +32,7 @@ export default function WelcomeScreen() {
     // possibly-returning user into onboarding (which would overwrite their saved
     // plan). Show a retry instead and let them in once the row loads.
     if (!onboarded && loadFailed) return <ConnectingScreen onRetry={refresh} />;
-    return <Redirect href={onboarded ? '/home' : '/name'} />;
+    return <Redirect href={onboarded ? '/home' : '/goal'} />;
   }
 
   return (
@@ -73,7 +73,7 @@ export default function WelcomeScreen() {
 
         {/* CTA */}
         <View>
-          <PrimaryButton onPress={() => go.push('/name')}>Get Started</PrimaryButton>
+          <PrimaryButton onPress={() => go.push('/goal')}>Get Started</PrimaryButton>
           <View style={{ flexDirection: 'row', justifyContent: 'center', marginTop: 18 }}>
             <Txt w={500} size={15} color={theme.inkSec}>
               Already have an account?{' '}

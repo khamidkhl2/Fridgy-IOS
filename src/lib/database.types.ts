@@ -80,6 +80,7 @@ export type Database = {
           id: string
           logged_on: string
           meal_type: string
+          micros: Json
           name: string
           protein_g: number
           quantity: number
@@ -94,6 +95,7 @@ export type Database = {
           id?: string
           logged_on?: string
           meal_type: string
+          micros?: Json
           name: string
           protein_g?: number
           quantity?: number
@@ -108,6 +110,7 @@ export type Database = {
           id?: string
           logged_on?: string
           meal_type?: string
+          micros?: Json
           name?: string
           protein_g?: number
           quantity?: number
@@ -167,6 +170,7 @@ export type Database = {
           fat_target_g: number | null
           gender: string | null
           goal: string | null
+          goal_weight_kg: number | null
           height_cm: number | null
           id: string
           name: string | null
@@ -194,6 +198,7 @@ export type Database = {
           fat_target_g?: number | null
           gender?: string | null
           goal?: string | null
+          goal_weight_kg?: number | null
           height_cm?: number | null
           id: string
           name?: string | null
@@ -221,6 +226,7 @@ export type Database = {
           fat_target_g?: number | null
           gender?: string | null
           goal?: string | null
+          goal_weight_kg?: number | null
           height_cm?: number | null
           id?: string
           name?: string | null
@@ -337,6 +343,30 @@ export type Database = {
           id?: string
           logged_on?: string
           user_id?: string
+        }
+        Relationships: []
+      }
+      weight_logs: {
+        Row: {
+          created_at: string
+          id: string
+          logged_on: string
+          user_id: string
+          weight_kg: number
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          logged_on?: string
+          user_id: string
+          weight_kg: number
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          logged_on?: string
+          user_id?: string
+          weight_kg?: number
         }
         Relationships: []
       }
