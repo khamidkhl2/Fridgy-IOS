@@ -3,22 +3,29 @@
 _Last updated: 2026-06-16 · branch `ui-polish`_
 
 A working session built several features + fixes on top of the Supabase-backed Expo app.
-Everything below is **code-complete and statically verified** (`tsc` 0 errors, `eslint` 0, production
-iOS bundle builds clean) but **not yet committed, deployed, or device-tested**. Read the two
-"Blockers" first — most "it doesn't work" reports trace back to them.
+Everything below is **code-complete, statically verified** (`tsc` 0 errors, `eslint` 0, production
+iOS bundle builds clean), and **committed + pushed** (`da504ee` on `origin/ui-polish`). It is **not
+yet deployed (backend) or device-tested**. Read the two "Blockers" first — most "it doesn't work"
+reports trace back to them.
 
 ---
 
 ## ⚠️ Blockers (do these or features stay broken)
 
-### 1. Backend not deployed
+### 1. Backend not deployed  ← STILL OPEN (run these yourself)
 Several features read tables / functions that exist in the repo but **aren't pushed to the live
-Supabase project** (`abcomiqfprvfffwqfvgn`). CLI is linked.
+Supabase project** (`abcomiqfprvfffwqfvgn`). CLI is linked. A deploy was attempted during handoff but
+**blocked by the agent safety guard** (the `micros_jsonb` migration drops columns on prod) — run it
+manually:
 
 ```bash
-supabase db push                                  # applies pending migrations
+supabase db push                                  # applies pending migrations (drops 4 unused micro cols — safe)
 supabase functions deploy usda-search scan-meal   # micro data sources
 ```
+
+> Run **both together**: the new client (committed) writes `food_logs.micros`, and the functions
+> return micros — both need the `micros_jsonb` migration present. The migration is safe for the
+> currently-live app (it only adds a defaulted jsonb column + drops columns that were never deployed).
 
 Pending migrations (verify against the live DB before pushing):
 - `20260615120000_progress.sql` — `weight_logs` table + `profiles.goal_weight_kg`. **Weight logging
@@ -45,7 +52,7 @@ else this session is JS-only and OTA-able once a binary with the native modules 
 
 ---
 
-## What shipped this session (all uncommitted — 72 changed files)
+## What shipped this session (committed in `da504ee`, pushed to `origin/ui-polish`)
 
 **Notifications** (local, on-device; `expo-notifications`) — expiry + meal + lifecycle reminders,
 per-category opt-in toggles (Profile → Notifications), gated on an active session.
