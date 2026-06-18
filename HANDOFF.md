@@ -4,28 +4,19 @@ _Last updated: 2026-06-16 · branch `ui-polish`_
 
 A working session built several features + fixes on top of the Supabase-backed Expo app.
 Everything below is **code-complete, statically verified** (`tsc` 0 errors, `eslint` 0, production
-iOS bundle builds clean), and **committed + pushed** (`da504ee` on `origin/ui-polish`). It is **not
-yet deployed (backend) or device-tested**. Read the two "Blockers" first — most "it doesn't work"
-reports trace back to them.
+iOS bundle builds clean), **committed + pushed** (`origin/ui-polish`), and the **backend is deployed**
+(migrations + edge functions pushed to prod on 2026-06-16). The remaining gap is a **fresh native
+build** (Blocker 2) — and nothing has been device-tested yet.
 
 ---
 
 ## ⚠️ Blockers (do these or features stay broken)
 
-### 1. Backend not deployed  ← STILL OPEN (run these yourself)
-Several features read tables / functions that exist in the repo but **aren't pushed to the live
-Supabase project** (`abcomiqfprvfffwqfvgn`). CLI is linked. A deploy was attempted during handoff but
-**blocked by the agent safety guard** (the `micros_jsonb` migration drops columns on prod) — run it
-manually:
-
-```bash
-supabase db push                                  # applies pending migrations (drops 4 unused micro cols — safe)
-supabase functions deploy usda-search scan-meal   # micro data sources
-```
-
-> Run **both together**: the new client (committed) writes `food_logs.micros`, and the functions
-> return micros — both need the `micros_jsonb` migration present. The migration is safe for the
-> currently-live app (it only adds a defaulted jsonb column + drops columns that were never deployed).
+### 1. Backend deployed  ✅ DONE (2026-06-16)
+`supabase db push` (progress/weight_logs + food_micros + micros_jsonb migrations) and
+`supabase functions deploy usda-search scan-meal` were run against the live project
+(`abcomiqfprvfffwqfvgn`). So **weight logging** and **micros** now work server-side — they'll surface
+in the app as soon as a build/OTA carrying the committed client code is out (see Blocker 2).
 
 Pending migrations (verify against the live DB before pushing):
 - `20260615120000_progress.sql` — `weight_logs` table + `profiles.goal_weight_kg`. **Weight logging
